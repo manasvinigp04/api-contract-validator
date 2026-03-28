@@ -1,0 +1,74 @@
+# API Contract Validator Configuration
+# This is the default configuration template
+
+# Project settings
+project_name: "API Contract Validator"
+verbose: 0  # 0=normal, 1=verbose, 2=debug, 3=trace
+environment: "development"  # development, ci, production
+
+# Test execution settings
+execution:
+  parallel_workers: 10          # Number of parallel test executions
+  timeout_seconds: 30           # Request timeout
+  retry_attempts: 3             # Number of retry attempts for failed requests
+  retry_delay_seconds: 1.0      # Delay between retries
+  verify_ssl: true              # Verify SSL certificates
+  follow_redirects: true        # Follow HTTP redirects
+
+# Test generation settings
+test_generation:
+  generate_valid: true          # Generate valid test cases
+  generate_invalid: true        # Generate invalid test cases
+  generate_boundary: true       # Generate boundary/edge cases
+  max_tests_per_endpoint: 50    # Maximum test cases per endpoint
+  enable_prioritization: true   # Enable risk-based prioritization
+  prioritization_weights:
+    critical_endpoints: 1.5     # Weight for POST/PUT/DELETE endpoints
+    recently_modified: 1.3      # Weight for recently changed endpoints
+    high_complexity: 1.2        # Weight for complex endpoints
+    user_reported_issues: 1.4   # Weight for endpoints with known issues
+
+# Drift detection settings
+drift_detection:
+  detect_contract_drift: true       # Detect contract violations
+  detect_validation_drift: true     # Detect validation inconsistencies
+  detect_behavioral_drift: true     # Detect behavioral anomalies
+  detect_progressive_drift: false   # Track drift over time (requires storage)
+  progressive_drift_history_size: 10
+
+# AI-assisted analysis settings
+ai_analysis:
+  enabled: true                 # Enable AI-assisted analysis
+  provider: "anthropic"         # AI provider (currently only anthropic)
+  model: "claude-3-5-sonnet-20241022"  # Claude model to use
+  api_key: null                 # Set via ANTHROPIC_API_KEY env var
+  max_tokens: 4000              # Maximum tokens for AI responses
+  temperature: 0.7              # Temperature for AI generation
+  enable_root_cause_analysis: true
+  enable_remediation_suggestions: true
+  enable_correlation_analysis: true
+
+# Reporting settings
+reporting:
+  output_directory: "./output"  # Output directory for reports
+  generate_markdown: true       # Generate Markdown reports
+  generate_json: true           # Generate JSON reports
+  generate_cli_summary: true    # Show CLI summary
+  markdown_template: null       # Custom Jinja2 template path
+  include_timestamp: true       # Include timestamp in reports
+  include_config_summary: true  # Include config summary in reports
+
+# Storage settings (optional)
+storage:
+  enabled: false                # Enable drift snapshot storage
+  storage_type: "tinydb"        # tinydb or sqlite
+  database_path: "./snapshots/drift.db"
+  max_snapshots: 100            # Maximum snapshots to keep
+  retention_days: 30            # Days to retain snapshots
+
+# Logging settings
+logging:
+  level: "INFO"                 # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file_path: null               # Log file path (null = no file logging)
+  console_output: true          # Enable console output
