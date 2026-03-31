@@ -14,6 +14,21 @@ A sophisticated API contract validation system with multi-fidelity input support
 
 ## Installation
 
+### For End Users (After Publishing to PyPI)
+
+```bash
+# Install from PyPI
+pip install api-contract-validator
+
+# Verify installation
+acv --version
+
+# Download spaCy model (optional - only for PRD parsing)
+python -m spacy download en_core_web_sm
+```
+
+### For Development
+
 ```bash
 # Clone the repository
 git clone <repository-url>
@@ -23,11 +38,14 @@ cd api-contract-validator
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install package
+# Install package with dev dependencies
 pip install -e ".[dev]"
 
 # Download spaCy language model
 python -m spacy download en_core_web_sm
+
+# Install pre-commit hooks
+pre-commit install
 ```
 
 ## Quick Start
@@ -41,20 +59,22 @@ acv config-check
 ### 2. Parse an OpenAPI Specification
 
 ```bash
-acv parse path/to/openapi.yaml
+acv parse examples/openapi/sample_users_api.yaml
 ```
 
 ### 3. Generate Test Cases
 
 ```bash
-acv generate-tests path/to/openapi.yaml -o tests/generated_tests.json
+acv generate-tests examples/openapi/sample_users_api.yaml -o tests/generated_tests.json
 ```
 
 ### 4. Validate API
 
 ```bash
-acv validate path/to/openapi.yaml --api-url https://api.example.com
+acv validate examples/openapi/sample_users_api.yaml --api-url https://api.example.com
 ```
+
+**See [Usage Examples](docs/USAGE_EXAMPLES.md) for more detailed examples and scenarios.**
 
 ## Configuration
 
@@ -86,6 +106,8 @@ Use with:
 ```bash
 acv validate spec.yaml --api-url https://api.example.com --config config.yaml
 ```
+
+**See [Usage Examples](docs/USAGE_EXAMPLES.md) for configuration examples for different scenarios.**
 
 ## Environment Variables
 
@@ -130,7 +152,12 @@ ruff check src/ tests/
 
 # Type check
 mypy src/
+
+# Or use pre-commit hooks
+pre-commit run --all-files
 ```
+
+**See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development guidelines.**
 
 ## Project Status
 
@@ -144,12 +171,28 @@ mypy src/
 - **Phase 6: Drift Detection** - Contract, validation, behavioral drift detectors
 - **Phase 7: Reporting & Analysis** - AI-assisted analysis, Markdown/JSON/CLI reports
 
-### 📋 Remaining
+### 📋 Next Steps
 
-- Phase 8: CI/CD integration examples
-- Comprehensive test suite
-- Example specifications and PRDs
-- Full documentation
+- Expand test coverage
+- Add more example specifications
+- Performance optimization
+- Additional documentation
+
+## Documentation
+
+- **[Integration Guide](docs/INTEGRATION_GUIDE.md)** - How to integrate into your project (Django, Flask, Node.js, etc.)
+- **[Usage Examples](docs/USAGE_EXAMPLES.md)** - Comprehensive usage scenarios and patterns
+- **[CI/CD Integration](docs/CI_CD_INTEGRATION.md)** - GitHub Actions workflow setup
+- **[Publishing Guide](docs/PUBLISHING.md)** - How to publish to PyPI
+- **[Contributing Guide](CONTRIBUTING.md)** - Development and contribution guidelines
+
+## Use Cases
+
+✅ **Pre-merge validation** - Catch API contract violations before merging PRs  
+✅ **Post-deployment verification** - Ensure production API matches specification  
+✅ **Continuous monitoring** - Detect drift in live APIs over time  
+✅ **Regression testing** - Compare API behavior across versions  
+✅ **Contract-first development** - TDD approach for API development
 
 ## License
 
@@ -157,4 +200,4 @@ MIT License
 
 ## Contributing
 
-Contributions welcome! Please see CONTRIBUTING.md for guidelines.
+Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
