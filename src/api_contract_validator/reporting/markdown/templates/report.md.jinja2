@@ -1,0 +1,221 @@
+# API Contract Validation Report
+
+**Generated:** {{ timestamp }}
+**API URL:** {{ api_url }}
+**Specification:** {{ spec_source }}
+
+---
+
+## Executive Summary
+
+{{ executive_summary }}
+
+### Test Execution Results
+
+| Metric | Value |
+|--------|-------|
+| Total Tests | {{ total_tests }} |
+| Passed | {{ passed_tests }} ✓ |
+| Failed | {{ failed_tests }} ✗ |
+| Pass Rate | {{ pass_rate }}% |
+
+### Drift Detection Summary
+
+| Category | Count |
+|----------|-------|
+| **Total Drift Issues** | **{{ total_drift_issues }}** |
+| Critical | {{ critical_issues }} 🔴 |
+| High | {{ high_severity_issues }} 🟠 |
+| Medium | {{ medium_severity_issues }} 🟡 |
+| Low | {{ low_severity_issues }} ⚪ |
+| | |
+| Contract Drift | {{ contract_drift_count }} |
+| Validation Drift | {{ validation_drift_count }} |
+| Behavioral Drift | {{ behavioral_drift_count }} |
+| Affected Endpoints | {{ affected_endpoints_count }} |
+
+{% if total_drift_issues == 0 %}
+## ✅ No Drift Detected
+
+The API implementation conforms to the contract specification. All tests passed successfully.
+
+{% else %}
+
+---
+
+## Drift Overview by Type
+
+### 🔴 Contract Drift ({{ contract_drift_count }} issues)
+
+Contract drift occurs when API responses don't match the expected schema.
+
+{% if contract_drift_count > 0 %}
+| Endpoint | Field | Violation | Expected | Actual | Severity |
+|----------|-------|-----------|----------|--------|----------|
+{% for issue in contract_drift[:10] %}
+| `{{ issue.endpoint_id }}` | `{{ issue.field_path }}` | {{ issue.violation_type }} | `{{ issue.expected }}` | `{{ issue.actual }}` | {{ issue.severity }} |
+{% endfor %}
+{% if contract_drift|length > 10 %}
+*... and {{ contract_drift|length - 10 }} more issues*
+{% endif %}
+{% else %}
+No contract drift detected.
+{% endif %}
+
+### 🟠 Validation Drift ({{ validation_drift_count }} issues)
+
+Validation drift occurs when invalid inputs are incorrectly accepted.
+
+{% if validation_drift_count > 0 %}
+| Endpoint | Constraint | Expected Status | Actual Status | Severity |
+|----------|------------|----------------|---------------|----------|
+{% for issue in validation_drift[:10] %}
+| `{{ issue.endpoint_id }}` | {{ issue.violated_constraint }} | {{ issue.expected_status_code_range }} | {{ issue.actual_status_code }} | {{ issue.severity }} |
+{% endfor %}
+{% if validation_drift|length > 10 %}
+*... and {{ validation_drift|length - 10 }} more issues*
+{% endif %}
+{% else %}
+No validation drift detected.
+{% endif %}
+
+### 🟡 Behavioral Drift ({{ behavioral_drift_count }} issues)
+
+Behavioral drift indicates inconsistent or unexpected response patterns.
+
+{% if behavioral_drift_count > 0 %}
+| Endpoint | Anomaly Type | Description | Severity |
+|----------|--------------|-------------|----------|
+{% for issue in behavioral_drift[:10] %}
+| `{{ issue.endpoint_id }}` | {{ issue.anomaly_type }} | {{ issue.description }} | {{ issue.severity }} |
+{% endfor %}
+{% if behavioral_drift|length > 10 %}
+*... and {{ behavioral_drift|length - 10 }} more issues*
+{% endif %}
+{% else %}
+No behavioral drift detected.
+{% endif %}
+
+---
+
+## Detailed Endpoint Analysis
+
+{% for endpoint_report in endpoint_reports %}
+### {{ endpoint_report.method }} `{{ endpoint_report.path }}`
+
+**Drift Summary:**
+- Total Issues: {{ endpoint_report.drift_summary.total_issues }}
+- Contract: {{ endpoint_report.drift_summary.contract_issues }}
+- Validation: {{ endpoint_report.drift_summary.validation_issues }}
+- Behavioral: {{ endpoint_report.drift_summary.behavioral_issues }}
+- Highest Severity: {{ endpoint_report.drift_summary.highest_severity }}
+
+{% if endpoint_report.drift_summary.issues %}
+**Issues:**
+{% for issue in endpoint_report.drift_summary.issues %}
+- **[{{ issue.severity }}]** {{ issue.message }}
+  - Field: `{{ issue.field_path }}`
+  - Expected: `{{ issue.expected }}`
+  - Actual: `{{ issue.actual }}`
+{% endfor %}
+{% endif %}
+
+{% if endpoint_report.root_cause %}
+**Root Cause Analysis:**
+{{ endpoint_report.root_cause }}
+{% endif %}
+
+{% if endpoint_report.remediations %}
+**Recommended Actions:**
+{% for remediation in endpoint_report.remediations %}
+{{ loop.index }}. {{ remediation }}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+
+---
+
+{% if ai_insights %}
+## 🧠 AI-Assisted Insights
+
+{% if systemic_issues %}
+### Systemic Issues
+{% for issue in systemic_issues %}
+- {{ issue }}
+{% endfor %}
+{% endif %}
+
+{% if quick_wins %}
+### Quick Wins
+{% for win in quick_wins %}
+- {{ win }}
+{% endfor %}
+{% endif %}
+
+{% if correlations %}
+### Issue Correlations
+{% for correlation in correlations %}
+#### {{ correlation.correlation_type|title }}
+{{ correlation.description }}
+
+**Impact:** {{ correlation.impact_summary }}
+
+**Affected Endpoints:** {{ correlation.endpoints|join(', ') }}
+{% endfor %}
+{% endif %}
+
+{% endif %}
+
+---
+
+## Recommendations
+
+{% if critical_issues > 0 %}
+### 🔴 Critical Priority
+Address critical contract violations immediately:
+{% for issue in top_critical_issues %}
+- **{{ issue.endpoint_id }}**: {{ issue.message }}
+{% endfor %}
+{% endif %}
+
+{% if high_severity_issues > 0 %}
+### 🟠 High Priority
+Review and fix high-severity drift issues:
+{% for issue in top_high_issues %}
+- **{{ issue.endpoint_id }}**: {{ issue.message }}
+{% endfor %}
+{% endif %}
+
+### General Recommendations
+
+1. Review all affected endpoints for contract compliance
+2. Strengthen input validation for endpoints with validation drift
+3. Investigate inconsistent response patterns in behavioral drift
+4. Consider updating API specification if implementation is intentional
+5. Run drift detection regularly in CI/CD pipeline
+
+{% endif %}
+
+---
+
+## Appendix
+
+### Configuration
+
+- Parallel Workers: {{ config.execution.parallel_workers }}
+- Timeout: {{ config.execution.timeout_seconds }}s
+- Contract Drift Detection: {{ config.drift_detection.detect_contract_drift }}
+- Validation Drift Detection: {{ config.drift_detection.detect_validation_drift }}
+- Behavioral Drift Detection: {{ config.drift_detection.detect_behavioral_drift }}
+- AI Analysis: {{ config.ai_analysis.enabled }}
+
+### Report Information
+
+- Report Generated: {{ report_timestamp }}
+- Report Format: Markdown
+- Generator Version: {{ generator_version }}
+
+---
+
+*Generated by API Contract Validator*

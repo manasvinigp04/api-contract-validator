@@ -134,18 +134,15 @@ mypy src/
 
 ## Project Status
 
-### ✅ Completed (Phases 1-5)
+### ✅ Completed (Phases 1-7)
 
 - **Phase 1: Foundation** - Project structure, CLI, configuration, logging
 - **Phase 2: Input Processing** - OpenAPI parser, PRD parser, reference resolution
 - **Phase 3: Contract Modeling** - Contract models, constraint extraction, rules engine
 - **Phase 4: Test Generation** - Valid, invalid, boundary test generators with prioritization
 - **Phase 5: Test Execution** - Async HTTP executor with retry logic and result collection
-
-### 🚧 In Progress (Phases 6-7)
-
 - **Phase 6: Drift Detection** - Contract, validation, behavioral drift detectors
-- **Phase 7: Reporting & Analysis** - AI-assisted analysis, Markdown/JSON reports
+- **Phase 7: Reporting & Analysis** - AI-assisted analysis, Markdown/JSON/CLI reports
 
 ### 📋 Remaining
 

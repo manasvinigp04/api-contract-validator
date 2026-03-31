@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from api_contract_validator.config.logging import get_logger
 from api_contract_validator.schema.contract.contract_model import (
+    ConstraintRule,
     ContractRule,
     Violation,
     ViolationType,
