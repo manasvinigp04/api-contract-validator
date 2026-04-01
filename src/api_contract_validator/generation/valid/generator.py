@@ -204,8 +204,12 @@ class ValidTestGenerator(BaseTestGenerator):
             return random.choice(constraints.enum)
 
         # Generate string respecting length constraints
-        min_len = getattr(constraints, "min_length", 1)
-        max_len = getattr(constraints, "max_length", 50)
+        min_len = getattr(constraints, "min_length", None)
+        max_len = getattr(constraints, "max_length", None)
+
+        # Handle None values
+        min_len = int(min_len) if min_len is not None else 1
+        max_len = int(max_len) if max_len is not None else 50
 
         # Ensure min_len is at least 1
         min_len = max(1, min_len)
@@ -215,14 +219,20 @@ class ValidTestGenerator(BaseTestGenerator):
 
     def _generate_valid_integer(self, constraints: Any) -> int:
         """Generate a valid integer value."""
-        minimum = getattr(constraints, "minimum", 0)
-        maximum = getattr(constraints, "maximum", 1000)
+        minimum = getattr(constraints, "minimum", None)
+        maximum = getattr(constraints, "maximum", None)
 
-        return random.randint(int(minimum), int(maximum))
+        min_val = int(minimum) if minimum is not None else 0
+        max_val = int(maximum) if maximum is not None else 1000
+
+        return random.randint(min_val, max_val)
 
     def _generate_valid_number(self, constraints: Any) -> float:
         """Generate a valid number value."""
-        minimum = getattr(constraints, "minimum", 0.0)
-        maximum = getattr(constraints, "maximum", 1000.0)
+        minimum = getattr(constraints, "minimum", None)
+        maximum = getattr(constraints, "maximum", None)
 
-        return round(random.uniform(float(minimum), float(maximum)), 2)
+        min_val = float(minimum) if minimum is not None else 0.0
+        max_val = float(maximum) if maximum is not None else 1000.0
+
+        return round(random.uniform(min_val, max_val), 2)

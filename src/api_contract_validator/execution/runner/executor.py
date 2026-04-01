@@ -188,6 +188,18 @@ class TestExecutor:
         else:
             return actual_status >= 400
 
+    def execute_tests_sync(self, test_cases: List[TestCase]) -> List[TestResult]:
+        """
+        Synchronous wrapper for test execution (instance method).
+
+        Args:
+            test_cases: List of test cases
+
+        Returns:
+            List of test results
+        """
+        return asyncio.run(self.execute_tests(test_cases))
+
 
 def execute_tests_sync(
     base_url: str, test_cases: List[TestCase], config: ExecutionConfig

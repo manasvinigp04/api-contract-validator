@@ -10,7 +10,12 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from api_contract_validator.analysis.drift.models import DriftReport
-from api_contract_validator.analysis.reasoning.models import AnalysisResult
+from api_contract_validator.analysis.reasoning.models import (
+    AnalysisResult,
+    IssueCorrelation,
+    RemediationSuggestion,
+    RootCauseAnalysis,
+)
 from api_contract_validator.config.logging import get_logger
 from api_contract_validator.config.models import Config
 

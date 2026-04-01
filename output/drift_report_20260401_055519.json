@@ -1,0 +1,47 @@
+{
+  "metadata": {
+    "generated_at": "2026-04-01T05:55:19.585744",
+    "generator_version": "0.1.0",
+    "format": "json",
+    "spec_source": "/private/var/folders/mj/5h6fz7nn6t56zfbfk49lwky40000gn/T/pytest-of-I764709/pytest-7/test_validate_command_no_ai_fl0/test_spec.yaml",
+    "spec_version": "1.0.0",
+    "api_url": "http://localhost:52118/"
+  },
+  "execution_summary": {
+    "total_tests": 17,
+    "passed": 6,
+    "failed": 11,
+    "pass_rate": 35.29
+  },
+  "drift_summary": {
+    "total_issues": 0,
+    "by_severity": {},
+    "by_type": {
+      "contract": 0,
+      "validation": 0,
+      "behavioral": 0
+    },
+    "affected_endpoints": [],
+    "has_critical": false
+  },
+  "drift_details": {
+    "contract_drift": [],
+    "validation_drift": [],
+    "behavioral_drift": []
+  },
+  "configuration": {
+    "execution": {
+      "parallel_workers": 10,
+      "timeout_seconds": 30
+    },
+    "drift_detection": {
+      "contract_drift": true,
+      "validation_drift": true,
+      "behavioral_drift": true
+    },
+    "ai_analysis": {
+      "enabled": false,
+      "model": "claude-3-5-sonnet-20241022"
+    }
+  }
+}

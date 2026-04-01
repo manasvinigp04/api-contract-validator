@@ -157,8 +157,8 @@ def validate(
 
         # Step 3: Extract contract rules
         console.print("[cyan]📋 Extracting contract rules...[/cyan]")
-        extractor = ConstraintExtractor()
-        api_contract = extractor.extract_contract(unified_spec)
+        extractor = ConstraintExtractor(unified_spec)
+        api_contract = extractor.extract_contract()
         total_contracts = len(api_contract.endpoint_contracts)
         console.print(f"   ✓ Extracted contracts for {total_contracts} endpoints")
 
@@ -251,41 +251,203 @@ def validate(
     "--output",
     "-o",
     type=click.Path(path_type=Path),
-    help="Output file for generated tests",
+    help="Output file for generated tests (default: generated_tests.json)",
 )
 @click.option(
     "--prioritize/--no-prioritize",
     default=True,
     help="Apply risk-based prioritization",
 )
+@click.option(
+    "--max-tests",
+    "-m",
+    type=int,
+    default=50,
+    help="Maximum tests per endpoint",
+)
 @click.pass_context
 def generate_tests(
-    ctx: click.Context, spec_path: Path, output: Optional[Path], prioritize: bool
+    ctx: click.Context, spec_path: Path, output: Optional[Path], prioritize: bool, max_tests: int
 ) -> None:
     """
     Generate test cases from specification
 
     SPEC_PATH: Path to OpenAPI specification or PRD document
     """
-    console.print(f"[bold blue]Generating tests from:[/bold blue] {spec_path}")
+    import json
 
-    # TODO: Implement test generation logic
-    console.print("\n[yellow]⚠ Implementation in progress...[/yellow]")
+    from api_contract_validator.config.exceptions import ACVException
+    from api_contract_validator.config.models import TestGenerationConfig
+    from api_contract_validator.generation.test_generator import MasterTestGenerator
+    from api_contract_validator.input.openapi.parser import OpenAPIParser
+
+    try:
+        console.print(f"[cyan]🧪 Generating tests from:[/cyan] {spec_path}\n")
+
+        # Step 1: Parse specification
+        console.print("[cyan]📄 Parsing specification...[/cyan]")
+        parser = OpenAPIParser()
+        spec = parser.parse_file(spec_path)
+        console.print(f"   ✓ Parsed {len(spec.endpoints)} endpoints")
+
+        # Step 2: Generate tests
+        console.print("[cyan]🔧 Generating test cases...[/cyan]")
+        gen_config = TestGenerationConfig(
+            enable_prioritization=prioritize,
+            max_tests_per_endpoint=max_tests,
+        )
+        generator = MasterTestGenerator(gen_config)
+        test_suite = generator.generate_test_suite(spec)
+
+        console.print(f"   ✓ Generated {len(test_suite.test_cases)} test cases")
+
+        # Display distribution
+        console.print("\n[bold]Test Distribution:[/bold]")
+        console.print(f"  • Valid tests:    {len(test_suite.get_valid_tests())}")
+        console.print(f"  • Invalid tests:  {len(test_suite.get_invalid_tests())}")
+        console.print(f"  • Boundary tests: {len(test_suite.get_boundary_tests())}")
+
+        if prioritize:
+            high_priority = len(test_suite.get_high_priority_tests())
+            console.print(f"  • High priority:  {high_priority}")
+
+        # Step 3: Write output
+        output_path = output or Path("generated_tests.json")
+        console.print(f"\n[cyan]💾 Writing test suite...[/cyan]")
+
+        test_suite_dict = test_suite.model_dump(mode="json")
+        with open(output_path, "w") as f:
+            json.dump(test_suite_dict, f, indent=2)
+
+        console.print(f"   ✓ Test suite written to: [cyan]{output_path}[/cyan]")
+
+        # Summary
+        console.print(f"\n[bold green]✓ Test Generation Complete![/bold green]")
+        console.print(f"   Total tests: {len(test_suite.test_cases)}")
+        console.print(f"   Output file: {output_path}")
+
+    except ACVException as e:
+        console.print(f"\n[red]❌ Test generation failed:[/red] {e}")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"\n[red]❌ Unexpected error:[/red] {e}")
+        sys.exit(1)
 
 
 @cli.command()
 @click.argument("spec_path", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--format",
+    "-f",
+    type=click.Choice(["table", "tree", "json"], case_sensitive=False),
+    default="table",
+    help="Output format (table, tree, or json)",
+)
 @click.pass_context
-def parse(ctx: click.Context, spec_path: Path) -> None:
+def parse(ctx: click.Context, spec_path: Path, format: str) -> None:
     """
-    Parse and validate specification file
+    Parse and display specification structure
 
     SPEC_PATH: Path to OpenAPI specification or PRD document
     """
-    console.print(f"[bold blue]Parsing specification:[/bold blue] {spec_path}")
+    from rich.table import Table
+    from rich.tree import Tree
 
-    # TODO: Implement parsing logic
-    console.print("\n[yellow]⚠ Implementation in progress...[/yellow]")
+    from api_contract_validator.config.exceptions import ACVException
+    from api_contract_validator.input.openapi.parser import OpenAPIParser
+
+    try:
+        console.print(f"[cyan]📄 Parsing specification:[/cyan] {spec_path}")
+
+        # Parse specification
+        parser = OpenAPIParser()
+        spec = parser.parse_file(spec_path)
+
+        console.print(f"[green]✓ Successfully parsed specification[/green]\n")
+
+        # Display metadata
+        console.print(f"[bold]API:[/bold] {spec.metadata.title}")
+        console.print(f"[bold]Version:[/bold] {spec.metadata.version}")
+        if spec.metadata.description:
+            console.print(f"[dim]{spec.metadata.description}[/dim]")
+        if spec.metadata.base_url:
+            console.print(f"[bold]Base URL:[/bold] {spec.metadata.base_url}")
+        console.print()
+
+        # Display endpoints based on format
+        if format == "table":
+            table = Table(title=f"Endpoints ({len(spec.endpoints)} total)", show_header=True)
+            table.add_column("Method", style="cyan", width=8)
+            table.add_column("Path", style="green")
+            table.add_column("Operation ID", style="dim")
+            table.add_column("Request", justify="center", width=8)
+            table.add_column("Responses", width=15)
+
+            for endpoint in spec.endpoints:
+                has_body = "✓" if endpoint.request_body else "-"
+                status_codes = ", ".join(str(r.status_code) for r in endpoint.responses)
+
+                table.add_row(
+                    endpoint.method.value,
+                    endpoint.path,
+                    endpoint.operation_id or "-",
+                    has_body,
+                    status_codes,
+                )
+
+            console.print(table)
+
+        elif format == "tree":
+            tree = Tree(f"[bold]{spec.metadata.title} v{spec.metadata.version}[/bold]")
+
+            for endpoint in spec.endpoints:
+                endpoint_label = f"[cyan]{endpoint.method.value}[/cyan] {endpoint.path}"
+                if endpoint.operation_id:
+                    endpoint_label += f" [dim]({endpoint.operation_id})[/dim]"
+
+                endpoint_node = tree.add(endpoint_label)
+
+                # Show parameters
+                if endpoint.parameters:
+                    params_node = endpoint_node.add(f"📌 Parameters ({len(endpoint.parameters)})")
+                    for param in endpoint.parameters[:5]:  # Limit to first 5
+                        req = "required" if param.constraints.required else "optional"
+                        params_node.add(f"{param.name} ({param.location}): {param.type.value} [{req}]")
+
+                # Show request body
+                if endpoint.request_body:
+                    body_node = endpoint_node.add("📥 Request Body")
+                    for field_name, field_def in list(endpoint.request_body.schema.items())[:5]:
+                        req = "required" if field_def.constraints.required else "optional"
+                        body_node.add(f"{field_name}: {field_def.type.value} [{req}]")
+
+                # Show responses
+                if endpoint.responses:
+                    resp_node = endpoint_node.add(f"📤 Responses ({len(endpoint.responses)})")
+                    for response in endpoint.responses:
+                        status_style = "green" if 200 <= response.status_code < 300 else "yellow"
+                        resp_node.add(f"[{status_style}]{response.status_code}[/{status_style}] - {len(response.schema)} fields")
+
+            console.print(tree)
+
+        elif format == "json":
+            import json
+
+            output = spec.model_dump(mode="json")
+            console.print_json(json.dumps(output, indent=2))
+
+        # Summary
+        console.print()
+        console.print(f"[green]✓ {len(spec.endpoints)} endpoints parsed successfully[/green]")
+        if spec.schemas:
+            console.print(f"[green]✓ {len(spec.schemas)} schemas found[/green]")
+
+    except ACVException as e:
+        console.print(f"\n[red]❌ Parse failed:[/red] {e}")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"\n[red]❌ Unexpected error:[/red] {e}")
+        sys.exit(1)
 
 
 @cli.command()
