@@ -1,0 +1,102 @@
+{
+  "metadata": {
+    "generated_at": "2026-04-02T05:28:59.668431",
+    "generator_version": "0.1.0",
+    "format": "json",
+    "spec_source": "examples/openapi/sample_users_api.yaml",
+    "spec_version": "1.0.0",
+    "api_url": "http://localhost:8000"
+  },
+  "execution_summary": {
+    "total_tests": 17,
+    "passed": 2,
+    "failed": 15,
+    "pass_rate": 11.76
+  },
+  "drift_summary": {
+    "total_issues": 5,
+    "by_severity": {
+      "medium": 5
+    },
+    "by_type": {
+      "contract": 0,
+      "validation": 5,
+      "behavioral": 0
+    },
+    "affected_endpoints": [
+      "POST:/users"
+    ],
+    "has_critical": false
+  },
+  "drift_details": {
+    "contract_drift": [],
+    "validation_drift": [
+      {
+        "endpoint_id": "POST:/users",
+        "test_id": "boundary_minlen_POST_1",
+        "test_type": "BOUNDARY",
+        "violated_constraint": "Boundary: name at minimum length 1",
+        "actual_status_code": 201,
+        "expected_status_code_range": "200-299",
+        "message": "Boundary test received 201 but failed validation. Response may not match expected schema.",
+        "severity": "medium"
+      },
+      {
+        "endpoint_id": "POST:/users",
+        "test_id": "boundary_maxlen_POST_2",
+        "test_type": "BOUNDARY",
+        "violated_constraint": "Boundary: name at maximum length 100",
+        "actual_status_code": 201,
+        "expected_status_code_range": "200-299",
+        "message": "Boundary test received 201 but failed validation. Response may not match expected schema.",
+        "severity": "medium"
+      },
+      {
+        "endpoint_id": "POST:/users",
+        "test_id": "boundary_minval_POST_3",
+        "test_type": "BOUNDARY",
+        "violated_constraint": "Boundary: age at minimum value 0",
+        "actual_status_code": 201,
+        "expected_status_code_range": "200-299",
+        "message": "Boundary test received 201 but failed validation. Response may not match expected schema.",
+        "severity": "medium"
+      },
+      {
+        "endpoint_id": "POST:/users",
+        "test_id": "boundary_maxval_POST_4",
+        "test_type": "BOUNDARY",
+        "violated_constraint": "Boundary: age at maximum value 150",
+        "actual_status_code": 201,
+        "expected_status_code_range": "200-299",
+        "message": "Boundary test received 201 but failed validation. Response may not match expected schema.",
+        "severity": "medium"
+      },
+      {
+        "endpoint_id": "POST:/users",
+        "test_id": "boundary_zero_POST_5",
+        "test_type": "BOUNDARY",
+        "violated_constraint": "Boundary: age with zero value",
+        "actual_status_code": 201,
+        "expected_status_code_range": "200-299",
+        "message": "Boundary test received 201 but failed validation. Response may not match expected schema.",
+        "severity": "medium"
+      }
+    ],
+    "behavioral_drift": []
+  },
+  "configuration": {
+    "execution": {
+      "parallel_workers": 10,
+      "timeout_seconds": 30
+    },
+    "drift_detection": {
+      "contract_drift": true,
+      "validation_drift": true,
+      "behavioral_drift": true
+    },
+    "ai_analysis": {
+      "enabled": true,
+      "model": "claude-3-5-sonnet-20241022"
+    }
+  }
+}

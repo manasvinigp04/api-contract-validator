@@ -50,31 +50,58 @@ pre-commit install
 
 ## Quick Start
 
-### 1. Check Configuration
+### Option 1: Using the CLI
 
 ```bash
+# 1. Check configuration
 acv config-check
-```
 
-### 2. Parse an OpenAPI Specification
-
-```bash
+# 2. Parse an OpenAPI specification
 acv parse examples/openapi/sample_users_api.yaml
-```
 
-### 3. Generate Test Cases
-
-```bash
+# 3. Generate test cases
 acv generate-tests examples/openapi/sample_users_api.yaml -o tests/generated_tests.json
-```
 
-### 4. Validate API
-
-```bash
+# 4. Validate API
 acv validate examples/openapi/sample_users_api.yaml --api-url https://api.example.com
 ```
 
-**See [Usage Examples](docs/USAGE_EXAMPLES.md) for more detailed examples and scenarios.**
+### Option 2: Using the REST API Server
+
+```bash
+# 1. Start the FastAPI server
+uvicorn api_contract_validator.api.server:app --reload --port 8000
+
+# 2. Open API documentation
+open http://localhost:8000/docs
+
+# 3. Use the REST endpoints
+curl -X POST http://localhost:8000/validate \
+  -F "spec_file=@openapi.yaml" \
+  -F 'validation_request={"api_url": "https://api.example.com", "parallel_workers": 10}'
+```
+
+### Option 3: Using as a Python Library
+
+```python
+from pathlib import Path
+from api_contract_validator.input.openapi.parser import OpenAPIParser
+from api_contract_validator.generation.test_generator import MasterTestGenerator
+from api_contract_validator.execution.runner.executor import TestExecutor
+
+# Parse specification
+parser = OpenAPIParser()
+spec = parser.parse_file(Path("openapi.yaml"))
+
+# Generate and execute tests
+generator = MasterTestGenerator()
+test_suite = generator.generate_test_suite(spec)
+
+executor = TestExecutor("https://api.example.com")
+results = executor.execute_tests_sync(test_suite.test_cases)
+```
+
+**See [Usage Examples](docs/USAGE_EXAMPLES.md) and [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) for more detailed examples.**
 
 ## Configuration
 
@@ -122,7 +149,8 @@ export ACV_REPORTING_OUTPUT_DIRECTORY=./reports  # Output directory
 
 ```
 src/api_contract_validator/
-├── cli/                 # CLI interface
+├── api/                # FastAPI REST server
+├── cli/                # CLI interface
 ├── input/              # Input processing (OpenAPI, PRD)
 ├── schema/             # Contract modeling and validation
 ├── generation/         # Test case generation
@@ -131,6 +159,16 @@ src/api_contract_validator/
 ├── reporting/          # Report generation
 └── config/             # Configuration management
 ```
+
+### Usage Modes
+
+The validator can be used in three ways:
+
+1. **CLI Tool** - Command-line interface for direct usage (`acv validate ...`)
+2. **REST API** - FastAPI server for web service integration (`uvicorn api_contract_validator.api.server:app`)
+3. **Python Library** - Import and use in your Python code (`from api_contract_validator import ...`)
+
+See [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) for detailed integration instructions.
 
 ## Development
 
@@ -180,11 +218,22 @@ pre-commit run --all-files
 
 ## Documentation
 
-- **[Integration Guide](docs/INTEGRATION_GUIDE.md)** - How to integrate into your project (Django, Flask, Node.js, etc.)
+- **[Integration Guide](INTEGRATION_GUIDE.md)** - Install as library/plugin, REST API usage, CI/CD integration
+- **[API Server Guide](src/api_contract_validator/api/README.md)** - FastAPI/Uvicorn server documentation
 - **[Usage Examples](docs/USAGE_EXAMPLES.md)** - Comprehensive usage scenarios and patterns
 - **[CI/CD Integration](docs/CI_CD_INTEGRATION.md)** - GitHub Actions workflow setup
 - **[Publishing Guide](docs/PUBLISHING.md)** - How to publish to PyPI
 - **[Contributing Guide](CONTRIBUTING.md)** - Development and contribution guidelines
+
+### Debugging in VS Code
+
+Launch configurations are provided in `.vscode/launch.json`:
+
+- **FastAPI: Uvicorn Server (Development)** - Start the API server with auto-reload
+- **FastAPI: Uvicorn Server (Production)** - Start with multiple workers
+- **CLI: Validate API** - Debug the CLI validation command
+
+Just press `F5` in VS Code and select your configuration!
 
 ## Use Cases
 
