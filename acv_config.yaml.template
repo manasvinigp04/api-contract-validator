@@ -1,0 +1,114 @@
+# ACV Configuration Template
+# Copy this file to your project root as 'acv_config.yaml' and customize for your project
+
+# Project structure - where ACV should look for your files
+project:
+  # Root directory of your project (optional, defaults to current directory)
+  root: "."
+
+  # OpenAPI specification location
+  spec:
+    path: "api/specs/openapi.yaml"  # or "specs/*.yaml" for multiple files
+    format: "openapi"  # openapi or prd
+
+  # API endpoints implementation (for reference and context)
+  endpoints:
+    directory: "src/api/routes"  # Directory containing your API route handlers
+    patterns:
+      - "**/*.py"
+      - "**/*.ts"
+      - "**/*.js"
+
+  # Existing tests (optional - ACV will analyze these)
+  tests:
+    directory: "tests"
+    patterns:
+      - "**/test_*.py"
+      - "**/*_test.py"
+
+  # Where to output generated tests and reports
+  output:
+    tests: "tests/generated"  # Generated test cases
+    reports: "reports/acv"    # Validation reports
+
+# API configuration - where your API is running
+api:
+  # Base URL of your API (can be overridden via --api-url flag)
+  base_url: "http://localhost:8000"
+
+  # Alternative URLs for different environments
+  environments:
+    local: "http://localhost:8000"
+    dev: "https://dev-api.example.com"
+    staging: "https://staging-api.example.com"
+    prod: "https://api.example.com"
+
+# Test execution settings
+execution:
+  parallel_workers: 10
+  timeout_seconds: 30
+  retry_attempts: 3
+  retry_delay_seconds: 1
+
+# Test generation settings
+test_generation:
+  generate_valid: true
+  generate_invalid: true
+  generate_boundary: true
+  max_tests_per_endpoint: 50
+  enable_prioritization: true
+
+  # Exclude certain endpoints from testing
+  exclude_endpoints:
+    - "/health"
+    - "/metrics"
+    - "/internal/*"
+
+# Drift detection settings
+drift_detection:
+  detect_contract_drift: true
+  detect_validation_drift: true
+  detect_behavioral_drift: true
+
+  # Severity thresholds
+  fail_on_critical: true
+  fail_on_high: false
+  warn_on_medium: true
+
+# AI-assisted analysis (requires ANTHROPIC_API_KEY)
+ai_analysis:
+  enabled: true
+  model: "claude-3-5-sonnet-20241022"
+  max_tokens: 4000
+
+# Reporting settings
+reporting:
+  # Output formats: markdown, json, cli, all
+  formats:
+    - markdown
+    - json
+
+  # Include detailed information
+  include_test_details: true
+  include_recommendations: true
+  include_code_snippets: false
+
+# Logging configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "detailed"  # simple, detailed, json
+  file: "logs/acv.log"  # Optional log file
+
+# CI/CD Integration
+ci_integration:
+  # Exit codes
+  exit_on_critical: true
+  exit_on_high: false
+
+  # Annotations (for GitHub Actions, GitLab CI, etc.)
+  create_annotations: true
+
+  # Compare with baseline (for progressive drift detection)
+  baseline:
+    enabled: false
+    path: "reports/acv/baseline.json"

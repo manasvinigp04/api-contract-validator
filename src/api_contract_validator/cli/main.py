@@ -61,12 +61,16 @@ def cli(ctx: click.Context, config: Optional[Path], verbose: int, quiet: bool) -
 
 
 @cli.command()
-@click.argument("spec_path", type=click.Path(exists=True, path_type=Path))
+@click.argument("spec_path", type=click.Path(exists=True, path_type=Path), required=False)
 @click.option(
     "--api-url",
     "-u",
-    required=True,
     help="Base URL of the API to validate",
+)
+@click.option(
+    "--env",
+    "-e",
+    help="Environment to use (local, dev, staging, prod) - reads from acv_config.yaml",
 )
 @click.option(
     "--output",
@@ -85,14 +89,12 @@ def cli(ctx: click.Context, config: Optional[Path], verbose: int, quiet: bool) -
     "--parallel",
     "-p",
     type=int,
-    default=10,
     help="Number of parallel test executions",
 )
 @click.option(
     "--timeout",
     "-t",
     type=int,
-    default=30,
     help="Request timeout in seconds",
 )
 @click.option(
@@ -103,19 +105,27 @@ def cli(ctx: click.Context, config: Optional[Path], verbose: int, quiet: bool) -
 @click.pass_context
 def validate(
     ctx: click.Context,
-    spec_path: Path,
-    api_url: str,
+    spec_path: Optional[Path],
+    api_url: Optional[str],
+    env: Optional[str],
     output: Optional[Path],
     format: str,
-    parallel: int,
-    timeout: int,
+    parallel: Optional[int],
+    timeout: Optional[int],
     no_ai_analysis: bool,
 ) -> None:
     """
     Validate API against specification
 
-    SPEC_PATH: Path to OpenAPI specification (YAML/JSON) or PRD document
+    If SPEC_PATH is not provided, ACV will look for 'acv_config.yaml' in the current directory
+    and use the spec path defined there.
+
+    Examples:
+        acv validate api/specs/openapi.yaml --api-url http://localhost:8000
+        acv validate --env dev  # Uses acv_config.yaml
+        acv validate  # Autodiscover from acv_config.yaml
     """
+    import yaml
     from api_contract_validator.analysis.drift.detector import DriftDetector
     from api_contract_validator.analysis.reasoning.analyzer import AIAnalyzer
     from api_contract_validator.config.exceptions import ACVException
@@ -131,18 +141,92 @@ def validate(
     cli_logger = get_logger("api_contract_validator.cli")
 
     try:
+        # Step 0: Auto-discover configuration from acv_config.yaml if needed
+        acv_config_path = Path("acv_config.yaml")
+        acv_config = None
+
+        if acv_config_path.exists():
+            console.print(f"[cyan]📋 Found acv_config.yaml[/cyan]")
+            with open(acv_config_path) as f:
+                acv_config = yaml.safe_load(f)
+
+        # Resolve spec_path from config if not provided
+        if not spec_path:
+            if acv_config and "project" in acv_config and "spec" in acv_config["project"]:
+                spec_path = Path(acv_config["project"]["spec"]["path"])
+                console.print(f"[cyan]📄 Using spec from config: {spec_path}[/cyan]")
+            else:
+                console.print("[red]❌ No spec path provided and no acv_config.yaml found[/red]")
+                console.print("Usage: acv validate <spec_path> --api-url <url>")
+                console.print("   or: Create acv_config.yaml in your project root")
+                sys.exit(1)
+
+        # Resolve API URL from config/environment if not provided
+        if not api_url:
+            if acv_config and "api" in acv_config:
+                if env and "environments" in acv_config["api"] and env in acv_config["api"]["environments"]:
+                    api_url = acv_config["api"]["environments"][env]
+                    console.print(f"[cyan]🌍 Using {env} environment: {api_url}[/cyan]")
+                elif "base_url" in acv_config["api"]:
+                    api_url = acv_config["api"]["base_url"]
+                    console.print(f"[cyan]🌐 Using base URL from config: {api_url}[/cyan]")
+
+        if not api_url:
+            console.print("[red]❌ No API URL provided[/red]")
+            console.print("Usage: acv validate --api-url <url>")
+            console.print("   or: Define api.base_url in acv_config.yaml")
+            sys.exit(1)
+
         console.print(f"\n[bold green]Starting API Validation[/bold green]")
         console.print(f"API URL: {api_url}")
         console.print(f"Specification: {spec_path}\n")
 
         # Step 1: Load configuration
         console.print("[cyan]⚙  Loading configuration...[/cyan]")
-        config_overrides = {
-            "execution": {"parallel_workers": parallel, "timeout_seconds": timeout},
-            "ai_analysis": {"enabled": not no_ai_analysis},
-        }
+
+        # Build config overrides from CLI args and acv_config.yaml
+        config_overrides = {}
+
+        # Merge acv_config settings
+        if acv_config:
+            if "execution" in acv_config:
+                config_overrides["execution"] = acv_config["execution"]
+            if "test_generation" in acv_config:
+                config_overrides["test_generation"] = acv_config["test_generation"]
+            if "drift_detection" in acv_config:
+                config_overrides["drift_detection"] = acv_config["drift_detection"]
+            if "ai_analysis" in acv_config:
+                config_overrides["ai_analysis"] = acv_config["ai_analysis"]
+            if "reporting" in acv_config:
+                config_overrides["reporting"] = acv_config["reporting"]
+            if "logging" in acv_config:
+                config_overrides["logging"] = acv_config["logging"]
+
+        # CLI args override config file
+        if parallel is not None:
+            if "execution" not in config_overrides:
+                config_overrides["execution"] = {}
+            config_overrides["execution"]["parallel_workers"] = parallel
+
+        if timeout is not None:
+            if "execution" not in config_overrides:
+                config_overrides["execution"] = {}
+            config_overrides["execution"]["timeout_seconds"] = timeout
+
+        if no_ai_analysis:
+            if "ai_analysis" not in config_overrides:
+                config_overrides["ai_analysis"] = {}
+            config_overrides["ai_analysis"]["enabled"] = False
+
         if output:
-            config_overrides["reporting"] = {"output_directory": str(output)}
+            if "reporting" not in config_overrides:
+                config_overrides["reporting"] = {}
+            config_overrides["reporting"]["output_directory"] = str(output)
+        elif acv_config and "project" in acv_config and "output" in acv_config["project"]:
+            # Use output.reports from acv_config if specified
+            if "reporting" not in config_overrides:
+                config_overrides["reporting"] = {}
+            config_overrides["reporting"]["output_directory"] = acv_config["project"]["output"].get("reports", "./output")
 
         config = ConfigLoader.load(ctx.obj.get("config_path"), config_overrides)
         set_config(config)
@@ -448,6 +532,130 @@ def parse(ctx: click.Context, spec_path: Path, format: str) -> None:
     except Exception as e:
         console.print(f"\n[red]❌ Unexpected error:[/red] {e}")
         sys.exit(1)
+
+
+@cli.command()
+@click.option(
+    "--spec-path",
+    "-s",
+    type=click.Path(path_type=Path),
+    help="Path to OpenAPI specification (relative to project root)",
+)
+@click.option(
+    "--api-url",
+    "-u",
+    help="Base URL of your API",
+)
+@click.option(
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Overwrite existing acv_config.yaml",
+)
+@click.pass_context
+def init(
+    ctx: click.Context,
+    spec_path: Optional[Path],
+    api_url: Optional[str],
+    force: bool,
+) -> None:
+    """
+    Initialize ACV in your project by creating acv_config.yaml
+
+    Creates a configuration file tailored to your project structure.
+    """
+    import yaml
+
+    config_path = Path("acv_config.yaml")
+
+    # Check if config already exists
+    if config_path.exists() and not force:
+        console.print("[yellow]⚠ acv_config.yaml already exists![/yellow]")
+        console.print("Use --force to overwrite, or edit the existing file.")
+        sys.exit(1)
+
+    console.print("[bold cyan]🚀 Initializing ACV in your project[/bold cyan]\n")
+
+    # Interactive prompts if not provided
+    if not spec_path:
+        spec_path = console.input("[cyan]Path to OpenAPI spec:[/cyan] [dim](e.g., api/openapi.yaml)[/dim] ")
+        spec_path = Path(spec_path) if spec_path else Path("api/openapi.yaml")
+
+    if not api_url:
+        api_url = console.input("[cyan]API base URL:[/cyan] [dim](e.g., http://localhost:8000)[/dim] ")
+        api_url = api_url if api_url else "http://localhost:8000"
+
+    # Create configuration
+    config = {
+        "project": {
+            "root": ".",
+            "spec": {
+                "path": str(spec_path),
+                "format": "openapi"
+            },
+            "endpoints": {
+                "directory": "src",
+                "patterns": ["**/*.py", "**/*.js", "**/*.ts"]
+            },
+            "tests": {
+                "directory": "tests",
+                "patterns": ["test_*.py", "*_test.py", "**/*.test.js"]
+            },
+            "output": {
+                "tests": "tests/generated",
+                "reports": "reports/acv"
+            }
+        },
+        "api": {
+            "base_url": api_url,
+            "environments": {
+                "local": "http://localhost:8000",
+                "dev": "https://dev-api.example.com",
+                "staging": "https://staging-api.example.com",
+                "prod": "https://api.example.com"
+            }
+        },
+        "execution": {
+            "parallel_workers": 10,
+            "timeout_seconds": 30,
+            "retry_attempts": 3
+        },
+        "test_generation": {
+            "generate_valid": True,
+            "generate_invalid": True,
+            "generate_boundary": True,
+            "max_tests_per_endpoint": 50,
+            "enable_prioritization": True
+        },
+        "drift_detection": {
+            "detect_contract_drift": True,
+            "detect_validation_drift": True,
+            "detect_behavioral_drift": True
+        },
+        "ai_analysis": {
+            "enabled": True,
+            "model": "claude-3-5-sonnet-20241022"
+        },
+        "reporting": {
+            "formats": ["markdown", "json"]
+        },
+        "logging": {
+            "level": "INFO",
+            "format": "detailed"
+        }
+    }
+
+    # Write config file
+    with open(config_path, "w") as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+    console.print(f"\n[green]✅ Created acv_config.yaml[/green]")
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print("  1. Review and customize acv_config.yaml")
+    console.print("  2. Ensure your OpenAPI spec exists at:", spec_path)
+    console.print("  3. Start your API server")
+    console.print(f"  4. Run: [cyan]acv validate[/cyan]")
+    console.print("\n[dim]Tip: Use 'acv validate --env dev' to test against different environments[/dim]")
 
 
 @cli.command()

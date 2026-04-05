@@ -2,17 +2,63 @@
 
 A sophisticated API contract validation system with multi-fidelity input support, intelligent test generation, and multi-dimensional drift detection.
 
+## 🚀 Quick Start for Using ACV in Your Project
+
+**See [QUICKSTART.md](QUICKSTART.md) for the complete guide.**
+
+```bash
+# 1. Install ACV in your project (editable mode for live updates)
+pip install -e /Users/I764709/api-contract-validator
+
+# 2. Initialize configuration
+acv init
+
+# 3. Run validation (ensure your API is running)
+acv validate
+```
+
+**Key Benefit**: Changes you make to ACV code are **immediately available** in all your projects—no reinstall needed!
+
 ## Features
 
 - **Multi-fidelity Input Support**: Parse both OpenAPI 3.0 specifications and semi-structured PRD documents
 - **Intelligent Test Generation**: Automatically generate valid, invalid, and boundary test cases
-- **Parallel Test Execution**: Execute tests efficiently with configurable parallelism
+- **Parallel Test Execution**: Execute tests efficiently with configurable parallelism (default: 10 workers)
 - **Multi-dimensional Drift Detection**: Detect contract, validation, behavioral, and progressive drift
 - **AI-Assisted Analysis**: Leverage Claude API for root cause analysis and remediation suggestions
 - **Rich Reporting**: Generate Markdown and JSON reports with actionable insights
 - **CI/CD Integration**: Seamless integration with GitHub Actions, GitLab CI, and other platforms
+- **Multiple Usage Modes**: Use as CLI tool, REST API server, or Python library
+- **Reusable Library**: Install once, use in any project with automatic live updates
 
 ## Installation
+
+### Using ACV in Your Project (Recommended)
+
+Install ACV as a reusable library in any project with **editable mode** for live updates:
+
+```bash
+# Install in editable mode
+pip install -e /Users/I764709/api-contract-validator
+
+# Initialize in your project
+acv init
+
+# Run validation
+acv validate
+```
+
+Add to your `requirements.txt`:
+```txt
+-e /Users/I764709/api-contract-validator
+```
+
+**Why `-e` flag?**
+- Changes to ACV code are immediately available in all projects
+- No reinstall needed after updates
+- Perfect for continuous development and testing
+
+**📖 Complete setup guide:** [QUICKSTART.md](QUICKSTART.md)
 
 ### For End Users (After Publishing to PyPI)
 
@@ -27,7 +73,7 @@ acv --version
 python -m spacy download en_core_web_sm
 ```
 
-### For Development
+### For ACV Development
 
 ```bash
 # Clone the repository
@@ -50,38 +96,55 @@ pre-commit install
 
 ## Quick Start
 
-### Option 1: Using the CLI
+### Option 1: Using ACV with acv_config.yaml (Recommended)
 
 ```bash
-# 1. Check configuration
+# In your project directory
+acv init  # Creates acv_config.yaml
+
+# Edit acv_config.yaml to point to your spec and API
+vim acv_config.yaml
+
+# Run validation
+acv validate
+
+# Or validate against specific environment
+acv validate --env dev
+acv validate --env staging
+```
+
+### Option 2: Using the CLI with Arguments
+
+```bash
+# Check configuration
 acv config-check
 
-# 2. Parse an OpenAPI specification
+# Parse an OpenAPI specification
 acv parse examples/openapi/sample_users_api.yaml
 
-# 3. Generate test cases
+# Generate test cases
 acv generate-tests examples/openapi/sample_users_api.yaml -o tests/generated_tests.json
 
-# 4. Validate API
+# Validate API
 acv validate examples/openapi/sample_users_api.yaml --api-url https://api.example.com
 ```
 
-### Option 2: Using the REST API Server
+### Option 3: Using the REST API Server
 
 ```bash
-# 1. Start the FastAPI server
-uvicorn api_contract_validator.api.server:app --reload --port 8000
+# Start the FastAPI server
+uvicorn api_contract_validator.api.server:app --reload --port 9000
 
-# 2. Open API documentation
-open http://localhost:8000/docs
+# Open API documentation
+open http://localhost:9000/docs
 
-# 3. Use the REST endpoints
-curl -X POST http://localhost:8000/validate \
+# Use the REST endpoints
+curl -X POST http://localhost:9000/validate \
   -F "spec_file=@openapi.yaml" \
   -F 'validation_request={"api_url": "https://api.example.com", "parallel_workers": 10}'
 ```
 
-### Option 3: Using as a Python Library
+### Option 4: Using as a Python Library
 
 ```python
 from pathlib import Path
@@ -101,20 +164,44 @@ executor = TestExecutor("https://api.example.com")
 results = executor.execute_tests_sync(test_suite.test_cases)
 ```
 
-**See [Usage Examples](docs/USAGE_EXAMPLES.md) and [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) for more detailed examples.**
+**See [QUICKSTART.md](QUICKSTART.md) for more detailed examples including pytest integration and custom scripts.**
 
 ## Configuration
 
-Create a `config.yaml` file (see `config/default.yaml` for template):
+### Using acv_config.yaml (Recommended)
+
+Create `acv_config.yaml` in your project root:
+
+```bash
+# Initialize interactively
+acv init
+
+# Or initialize with values
+acv init --spec-path api/openapi.yaml --api-url http://localhost:8000
+```
+
+Example `acv_config.yaml`:
 
 ```yaml
-# Test execution settings
+project:
+  spec:
+    path: "api/openapi.yaml"
+  output:
+    reports: "reports/acv"
+
+api:
+  base_url: "http://localhost:8000"
+  environments:
+    local: "http://localhost:8000"
+    dev: "https://dev-api.example.com"
+    staging: "https://staging-api.example.com"
+    prod: "https://api.example.com"
+
 execution:
   parallel_workers: 10
   timeout_seconds: 30
   retry_attempts: 3
 
-# Test generation settings
 test_generation:
   generate_valid: true
   generate_invalid: true
@@ -122,19 +209,25 @@ test_generation:
   max_tests_per_endpoint: 50
   enable_prioritization: true
 
-# AI analysis (requires ANTHROPIC_API_KEY)
 ai_analysis:
   enabled: true
   model: "claude-3-5-sonnet-20241022"
 ```
 
-Use with:
+Run with config:
+```bash
+acv validate                  # Uses acv_config.yaml
+acv validate --env dev        # Uses dev environment from config
+acv validate --parallel 20    # Override specific settings
+```
+
+### Using Command-Line Config
 
 ```bash
 acv validate spec.yaml --api-url https://api.example.com --config config.yaml
 ```
 
-**See [Usage Examples](docs/USAGE_EXAMPLES.md) for configuration examples for different scenarios.**
+**See [acv_config.yaml.template](acv_config.yaml.template) for all available options.**
 
 ## Environment Variables
 
@@ -166,9 +259,9 @@ The validator can be used in three ways:
 
 1. **CLI Tool** - Command-line interface for direct usage (`acv validate ...`)
 2. **REST API** - FastAPI server for web service integration (`uvicorn api_contract_validator.api.server:app`)
-3. **Python Library** - Import and use in your Python code (`from api_contract_validator import ...`)
+3. **Python Library** - Import and use in your Python code
 
-See [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) for detailed integration instructions.
+See [QUICKSTART.md](QUICKSTART.md) for detailed examples of each usage mode.
 
 ## Development
 
@@ -195,10 +288,6 @@ mypy src/
 pre-commit run --all-files
 ```
 
-**See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development guidelines.**
-
-## Project Status
-
 ### ✅ Completed (Phases 1-7)
 
 - **Phase 1: Foundation** - Project structure, CLI, configuration, logging
@@ -209,31 +298,18 @@ pre-commit run --all-files
 - **Phase 6: Drift Detection** - Contract, validation, behavioral drift detectors
 - **Phase 7: Reporting & Analysis** - AI-assisted analysis, Markdown/JSON/CLI reports
 
-### 📋 Next Steps
+### 🎯 Current State
 
-- Expand test coverage
-- Add more example specifications
-- Performance optimization
-- Additional documentation
+✅ **Production-ready** as a reusable library  
+✅ **Live update support** via editable install  
+✅ **Project-based configuration** with `acv_config.yaml`  
+✅ **Multi-environment support** (local/dev/staging/prod)  
+✅ **Complete documentation** in README.md and QUICKSTART.md
 
 ## Documentation
 
-- **[Integration Guide](INTEGRATION_GUIDE.md)** - Install as library/plugin, REST API usage, CI/CD integration
-- **[API Server Guide](src/api_contract_validator/api/README.md)** - FastAPI/Uvicorn server documentation
-- **[Usage Examples](docs/USAGE_EXAMPLES.md)** - Comprehensive usage scenarios and patterns
-- **[CI/CD Integration](docs/CI_CD_INTEGRATION.md)** - GitHub Actions workflow setup
-- **[Publishing Guide](docs/PUBLISHING.md)** - How to publish to PyPI
-- **[Contributing Guide](CONTRIBUTING.md)** - Development and contribution guidelines
-
-### Debugging in VS Code
-
-Launch configurations are provided in `.vscode/launch.json`:
-
-- **FastAPI: Uvicorn Server (Development)** - Start the API server with auto-reload
-- **FastAPI: Uvicorn Server (Production)** - Start with multiple workers
-- **CLI: Validate API** - Debug the CLI validation command
-
-Just press `F5` in VS Code and select your configuration!
+- **[QUICKSTART.md](QUICKSTART.md)** - Complete setup guide with examples, architecture, and REST API documentation
+- **[acv_config.yaml.template](acv_config.yaml.template)** - Configuration template with all available options
 
 ## Use Cases
 
