@@ -2,14 +2,17 @@
 AI-Assisted Analyzer
 
 Uses Claude API to provide root cause analysis and remediation suggestions.
+Enhanced with PageRank-based context prioritization for cost optimization.
 """
 
 import json
+from collections import defaultdict
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from anthropic import Anthropic
 
+from api_contract_validator.analysis.context.page_ranker import APIContextRanker
 from api_contract_validator.analysis.drift.models import DriftReport
 from api_contract_validator.analysis.reasoning.models import (
     AnalysisConfidence,
@@ -41,6 +44,9 @@ class AIAnalyzer:
             AnalysisError: If API key is missing
         """
         self.config = config
+        self.context_ranker = APIContextRanker()
+        self.api_call_count = 0
+        self.tokens_saved = 0
 
         if not config.enabled:
             logger.info("AI analysis disabled")
@@ -138,13 +144,39 @@ class AIAnalyzer:
             return f"Analysis of {drift_report.summary.total_issues} drift issues across {len(drift_report.summary.affected_endpoints)} endpoints."
 
     def _analyze_root_causes(self, drift_report: DriftReport) -> List[RootCauseAnalysis]:
-        """Analyze root causes of drift issues."""
-        logger.info("Performing root cause analysis")
+        """
+        Analyze root causes of drift issues using PageRank-based context prioritization.
+        """
+        logger.info("Performing root cause analysis with context ranking")
         root_causes = []
 
-        # Group issues by endpoint for efficient analysis
-        for endpoint_id in drift_report.summary.affected_endpoints[:10]:  # Limit to top 10
-            endpoint_issues = drift_report.get_issues_by_endpoint(endpoint_id)
+        # Organize issues by endpoint
+        issues_by_endpoint = self._organize_issues_by_endpoint(drift_report)
+
+        # Get endpoints (if available from drift report metadata)
+        endpoints = getattr(drift_report, '_endpoints', [])
+
+        if not endpoints:
+            # Fallback to simple endpoint list if metadata not available
+            logger.warning("Endpoint metadata not available, using simple ranking")
+            ranked_endpoints = list(issues_by_endpoint.keys())[:10]
+        else:
+            # Use PageRank to prioritize endpoints
+            ranked_contexts = self.context_ranker.rank_contexts(
+                endpoints=endpoints,
+                drift_issues=issues_by_endpoint,
+                max_tokens=self.config.max_tokens // 2,  # Reserve half for responses
+                max_contexts=10
+            )
+
+            # Log ranking explanation
+            logger.debug(self.context_ranker.explain_ranking(ranked_contexts))
+
+            ranked_endpoints = [ctx.endpoint_id for ctx in ranked_contexts]
+
+        # Analyze top-ranked endpoints
+        for endpoint_id in ranked_endpoints:
+            endpoint_issues = issues_by_endpoint.get(endpoint_id, {})
             total_endpoint_issues = sum(len(issues) for issues in endpoint_issues.values())
 
             if total_endpoint_issues == 0:
@@ -160,6 +192,8 @@ class AIAnalyzer:
                     messages=[{"role": "user", "content": prompt}],
                 )
 
+                self.api_call_count += 1
+
                 # Parse response and create RootCauseAnalysis
                 analysis_text = response.content[0].text.strip()
                 root_cause = self._parse_root_cause_response(
@@ -172,11 +206,13 @@ class AIAnalyzer:
                 logger.error(f"Root cause analysis failed for {endpoint_id}: {e}")
                 continue
 
-        logger.info(f"Generated {len(root_causes)} root cause analyses")
+        logger.info(f"Generated {len(root_causes)} root cause analyses ({self.api_call_count} API calls)")
         return root_causes
 
     def _suggest_remediations(self, drift_report: DriftReport) -> List[RemediationSuggestion]:
-        """Generate remediation suggestions for drift issues."""
+        """
+        Generate remediation suggestions with batching for cost optimization.
+        """
         logger.info("Generating remediation suggestions")
         suggestions = []
 
@@ -185,28 +221,47 @@ class AIAnalyzer:
             issue
             for issue in (drift_report.contract_drift + drift_report.validation_drift)
             if issue.severity in ["critical", "high"]
-        ][:10]  # Limit to top 10
+        ]
 
-        for issue in high_priority_issues:
-            prompt = self._build_remediation_prompt(issue)
+        # Batch similar issues together
+        batched_issues = self._batch_similar_issues(high_priority_issues, max_batches=5)
+
+        logger.info(f"Batched {len(high_priority_issues)} issues into {len(batched_issues)} groups")
+
+        for batch in batched_issues:
+            if len(batch) == 1:
+                # Single issue - use individual prompt
+                prompt = self._build_remediation_prompt(batch[0])
+            else:
+                # Multiple similar issues - use batch prompt
+                prompt = self._build_batch_remediation_prompt(batch)
 
             try:
                 response = self.client.messages.create(
                     model=self.config.model,
-                    max_tokens=1000,
+                    max_tokens=1500 if len(batch) > 1 else 1000,
                     temperature=self.config.temperature,
                     messages=[{"role": "user", "content": prompt}],
                 )
 
-                suggestion = self._parse_remediation_response(issue, response.content[0].text)
-                if suggestion:
-                    suggestions.append(suggestion)
+                self.api_call_count += 1
+
+                if len(batch) == 1:
+                    suggestion = self._parse_remediation_response(batch[0], response.content[0].text)
+                    if suggestion:
+                        suggestions.append(suggestion)
+                else:
+                    batch_suggestions = self._parse_batch_remediation_response(
+                        batch, response.content[0].text
+                    )
+                    suggestions.extend(batch_suggestions)
 
             except Exception as e:
-                logger.error(f"Remediation suggestion failed for issue: {e}")
+                logger.error(f"Remediation suggestion failed for batch: {e}")
                 continue
 
-        logger.info(f"Generated {len(suggestions)} remediation suggestions")
+        logger.info(f"Generated {len(suggestions)} remediation suggestions ({self.api_call_count} API calls)")
+        return suggestions
         return suggestions
 
     def _correlate_issues(self, drift_report: DriftReport) -> List[IssueCorrelation]:
@@ -424,3 +479,122 @@ Provide 1-3 significant correlations."""
                     points.append(clean)
 
         return points[:10]  # Limit to 10 points
+
+    def _organize_issues_by_endpoint(self, drift_report: DriftReport) -> Dict[str, Dict[str, List]]:
+        """
+        Organize all drift issues by endpoint.
+
+        Returns:
+            Dict mapping endpoint_id to dict of issue types and their lists
+        """
+        issues_by_endpoint = defaultdict(lambda: defaultdict(list))
+
+        for issue in drift_report.contract_drift:
+            issues_by_endpoint[issue.endpoint_id]['contract'].append(issue)
+
+        for issue in drift_report.validation_drift:
+            issues_by_endpoint[issue.endpoint_id]['validation'].append(issue)
+
+        for issue in drift_report.behavioral_drift:
+            issues_by_endpoint[issue.endpoint_id]['behavioral'].append(issue)
+
+        return dict(issues_by_endpoint)
+
+    def _batch_similar_issues(self, issues: List, max_batches: int = 5) -> List[List]:
+        """
+        Batch similar issues together for efficient API calls.
+
+        Groups issues by:
+        - Same endpoint
+        - Same issue type
+        - Similar error patterns
+        """
+        batches = defaultdict(list)
+
+        for issue in issues:
+            # Create batch key from endpoint and issue type
+            batch_key = (
+                issue.endpoint_id,
+                type(issue).__name__,
+                getattr(issue, 'severity', 'medium')
+            )
+            batches[batch_key].append(issue)
+
+        # Sort batches by size (largest first) and severity
+        sorted_batches = sorted(
+            batches.values(),
+            key=lambda b: (
+                self._batch_priority_score(b),
+                len(b)
+            ),
+            reverse=True
+        )
+
+        return sorted_batches[:max_batches]
+
+    def _batch_priority_score(self, batch: List) -> float:
+        """Calculate priority score for a batch of issues."""
+        severity_weights = {'critical': 10, 'high': 5, 'medium': 2, 'low': 1}
+        total = sum(
+            severity_weights.get(getattr(issue, 'severity', 'medium'), 1)
+            for issue in batch
+        )
+        return total / len(batch) if batch else 0
+
+    def _build_batch_remediation_prompt(self, issues: List) -> str:
+        """Build prompt for batch remediation of similar issues."""
+        endpoint_id = issues[0].endpoint_id
+        issue_type = type(issues[0]).__name__
+
+        issues_summary = "\n".join([
+            f"  - {getattr(issue, 'message', str(issue))[:100]}"
+            for issue in issues[:5]  # Max 5 examples
+        ])
+
+        return f"""Suggest how to fix these {len(issues)} similar API drift issues:
+
+Endpoint: {endpoint_id}
+Issue Type: {issue_type}
+Severity: {getattr(issues[0], 'severity', 'medium')}
+
+Issues:
+{issues_summary}
+
+Provide ONE remediation that fixes all these issues:
+1. Clear fix title
+2. Root cause explanation
+3. Code example that addresses the pattern
+4. 3-5 implementation steps
+5. Effort estimate (low/medium/high)
+
+Be practical and focus on the systematic fix."""
+
+    def _parse_batch_remediation_response(
+        self, issues: List, response_text: str
+    ) -> List[RemediationSuggestion]:
+        """Parse batch remediation response into individual suggestions."""
+        lines = response_text.split("\n")
+        title = lines[0] if lines else "Fix batch of similar issues"
+
+        # Extract code blocks if present
+        code_example = None
+        if "```" in response_text:
+            code_blocks = response_text.split("```")
+            if len(code_blocks) >= 3:
+                code_example = code_blocks[1].strip()
+
+        steps = self._extract_bullet_points(response_text)
+
+        # Create one suggestion that applies to all issues in batch
+        suggestion = RemediationSuggestion(
+            issue_id=f"batch-{issues[0].endpoint_id}",
+            endpoint_id=issues[0].endpoint_id,
+            title=f"{title} ({len(issues)} issues)",
+            description=f"Batch fix for {len(issues)} similar issues:\n{response_text[:300]}...",
+            code_example=code_example,
+            implementation_steps=steps[:5],
+            estimated_effort="medium",
+            priority=getattr(issues[0], 'severity', 'medium'),
+        )
+
+        return [suggestion]

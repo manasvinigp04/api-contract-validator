@@ -47,8 +47,11 @@ class ValidationDriftDetector:
 
             # Check if invalid tests incorrectly passed
             if test_case.test_type == TestCaseType.INVALID:
-                if result.passed:
-                    # Invalid test passed when it should have failed
+                # FIXED: Check actual status code, not result.passed flag
+                # 422/4xx is CORRECT rejection, not drift!
+                # Only 2xx (success) for invalid input = validation drift
+                if 200 <= result.status_code < 300:
+                    # Invalid test got 2xx success - validation drift!
                     issue = ValidationDriftIssue(
                         endpoint_id=test_case.endpoint.endpoint_id,
                         test_id=test_case.test_id,
@@ -58,8 +61,8 @@ class ValidationDriftDetector:
                         actual_status_code=result.status_code,
                         expected_status_code_range="400-499",
                         message=(
-                            f"API accepted invalid input that should have been rejected. "
-                            f"Expected 4xx status, got {result.status_code}"
+                            f"API accepted invalid input (got {result.status_code}). "
+                            f"Should reject with 4xx status. Constraint violated: {test_case.description}"
                         ),
                         severity=DriftSeverity.HIGH,
                     )
