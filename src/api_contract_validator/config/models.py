@@ -70,6 +70,7 @@ class ReportingConfig(BaseModel):
     generate_markdown: bool = True
     generate_json: bool = True
     generate_cli_summary: bool = True
+    generate_claude_integration: bool = True  # NEW: Generate Claude Code files
     markdown_template: Optional[Path] = None
     include_timestamp: bool = True
     include_config_summary: bool = True

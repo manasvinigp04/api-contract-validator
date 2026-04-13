@@ -14,6 +14,9 @@ from api_contract_validator.analysis.reasoning.models import AnalysisResult
 from api_contract_validator.config.exceptions import ReportingError
 from api_contract_validator.config.logging import get_logger
 from api_contract_validator.config.models import Config
+from api_contract_validator.reporting.claude_integration.generator import (
+    ClaudeIntegrationGenerator,
+)
 from api_contract_validator.reporting.cli.formatter import CLIFormatter
 from api_contract_validator.reporting.json.generator import JSONReportGenerator
 from api_contract_validator.reporting.markdown.generator import MarkdownReportGenerator
@@ -41,6 +44,7 @@ class ReportGenerator:
         self.markdown_generator = MarkdownReportGenerator(config)
         self.json_generator = JSONReportGenerator(config)
         self.cli_formatter = CLIFormatter(self.console)
+        self.claude_generator = ClaudeIntegrationGenerator(config)
 
     def generate_reports(
         self,
@@ -48,6 +52,7 @@ class ReportGenerator:
         analysis_result: Optional[AnalysisResult] = None,
         output_format: str = "all",
         output_dir: Optional[Path] = None,
+        spec_path: Optional[Path] = None,
     ) -> Dict[str, Path]:
         """
         Generate reports in specified formats.
@@ -57,6 +62,7 @@ class ReportGenerator:
             analysis_result: Optional AI analysis results
             output_format: Format to generate ("markdown", "json", "cli", "all")
             output_dir: Output directory (uses config default if not provided)
+            spec_path: Path to OpenAPI spec (for Claude integration)
 
         Returns:
             Dictionary mapping format name to output file path
@@ -92,6 +98,21 @@ class ReportGenerator:
                 self.cli_formatter.format_and_display(drift_report, analysis_result)
                 # CLI output doesn't have a file path
                 report_paths["cli"] = Path("<console>")
+
+            # Generate Claude Code integration files
+            if self.config.reporting.generate_claude_integration and spec_path:
+                logger.info("Generating Claude Code integration files")
+                try:
+                    claude_files = self.claude_generator.generate(
+                        drift_report=drift_report,
+                        analysis_result=analysis_result,
+                        spec_path=spec_path,
+                    )
+                    report_paths.update(claude_files)
+                    logger.info(f"Generated {len(claude_files)} Claude integration files")
+                except Exception as e:
+                    logger.warning(f"Claude integration generation failed: {e}")
+                    # Don't fail the entire report generation if Claude integration fails
 
             logger.info(f"Report generation complete: {len(report_paths)} formats generated")
             return report_paths

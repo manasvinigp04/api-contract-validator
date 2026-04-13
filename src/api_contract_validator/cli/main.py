@@ -300,13 +300,43 @@ def validate(
             analysis_result=analysis_result,
             output_format=format,
             output_dir=output,
+            spec_path=spec_path,  # Pass spec_path for Claude integration
         )
 
         # Display report locations
         console.print("\n[bold green]✓ Validation Complete![/bold green]\n")
+
+        # Separate report types
+        standard_reports = {}
+        claude_files = {}
+
         for format_name, path in report_paths.items():
-            if path != Path("<console>"):
-                console.print(f"  📄 {format_name.title()} report: [cyan]{path}[/cyan]")
+            if format_name in ["claude_md", "fix_validation_skill", "fix_contract_skill", "apply_remediations_skill"]:
+                claude_files[format_name] = path
+            else:
+                standard_reports[format_name] = path
+
+        # Display standard reports
+        if standard_reports:
+            console.print("[bold]📊 Reports Generated:[/bold]")
+            for format_name, path in standard_reports.items():
+                if path != Path("<console>"):
+                    console.print(f"  • {format_name.title()}: [cyan]{path}[/cyan]")
+
+        # Display Claude integration files
+        if claude_files:
+            console.print("\n[bold]🤖 Claude Code Integration:[/bold]")
+            for format_name, path in claude_files.items():
+                file_description = {
+                    "claude_md": "Project guidance",
+                    "fix_validation_skill": "Fix validation drift",
+                    "fix_contract_skill": "Fix contract drift",
+                    "apply_remediations_skill": "Apply AI remediations",
+                }.get(format_name, "Claude file")
+                console.print(f"  • {file_description}: [cyan]{path}[/cyan]")
+
+            console.print("\n[dim]💡 Use Claude Code CLI to fix issues:[/dim]")
+            console.print("[dim]   claude \"fix the validation drift issues\"[/dim]")
 
         # Exit with appropriate code
         if drift_report.has_critical_issues():
