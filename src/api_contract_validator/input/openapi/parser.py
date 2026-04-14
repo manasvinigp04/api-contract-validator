@@ -43,17 +43,22 @@ class OpenAPIParser:
 
     def parse_file(self, spec_path: Path) -> UnifiedAPISpec:
         """
-        Parse an OpenAPI specification file.
+        Parse an OpenAPI specification file or directory.
 
         Args:
-            spec_path: Path to OpenAPI spec file (YAML or JSON)
+            spec_path: Path to OpenAPI spec file (YAML/JSON) or directory containing specs
 
         Returns:
-            UnifiedAPISpec instance
+            UnifiedAPISpec instance (merged if directory with multiple specs)
 
         Raises:
             OpenAPIError: If parsing or validation fails
         """
+        # Handle directory - parse ALL specs and merge
+        if spec_path.is_dir():
+            logger.info(f"Spec path is directory: {spec_path}")
+            return self.parse_directory(spec_path)
+
         logger.info(f"Parsing OpenAPI specification: {spec_path}")
 
         try:
@@ -87,6 +92,111 @@ class OpenAPIParser:
 
         except Exception as e:
             raise OpenAPIError(f"Failed to parse OpenAPI specification: {e}")
+
+    def parse_directory(self, spec_dir: Path) -> UnifiedAPISpec:
+        """
+        Parse all OpenAPI specs in a directory and merge them.
+
+        Args:
+            spec_dir: Directory containing OpenAPI spec files
+
+        Returns:
+            Merged UnifiedAPISpec with all endpoints from all specs
+
+        Raises:
+            OpenAPIError: If no specs found or parsing fails
+        """
+        logger.info(f"Parsing all OpenAPI specs in directory: {spec_dir}")
+
+        # Find all spec files
+        spec_files = sorted(
+            list(spec_dir.glob("*.yaml"))
+            + list(spec_dir.glob("*.yml"))
+            + list(spec_dir.glob("*.json"))
+        )
+
+        if not spec_files:
+            raise OpenAPIError(f"No OpenAPI specs found in directory: {spec_dir}")
+
+        logger.info(f"Found {len(spec_files)} spec files")
+
+        # Parse all specs
+        parsed_specs = []
+        for spec_file in spec_files:
+            try:
+                logger.info(f"  Parsing: {spec_file.name}")
+                # Create new parser instance for each file to avoid state issues
+                parser = OpenAPIParser()
+                spec = parser._parse_single_file(spec_file)
+                parsed_specs.append(spec)
+                logger.info(f"    ✓ {len(spec.endpoints)} endpoints")
+            except Exception as e:
+                logger.warning(f"    ✗ Failed: {e}")
+                continue
+
+        if not parsed_specs:
+            raise OpenAPIError(f"Failed to parse any specs in directory: {spec_dir}")
+
+        # Merge all specs
+        merged_spec = self._merge_specs(parsed_specs, spec_dir)
+        logger.info(
+            f"✓ Merged {len(parsed_specs)} specs → {len(merged_spec.endpoints)} total endpoints"
+        )
+
+        return merged_spec
+
+    def _parse_single_file(self, spec_path: Path) -> UnifiedAPISpec:
+        """Parse a single spec file (helper method)."""
+        spec_dict, spec_url = read_from_filename(str(spec_path))
+        validate_spec(spec_dict)
+        self.spec_dict = spec_dict
+
+        metadata = self._parse_metadata()
+        security_schemes = self._parse_security_schemes()
+        self._parse_schemas()
+        endpoints = self._parse_endpoints()
+
+        return UnifiedAPISpec(
+            source_type=SourceType.OPENAPI,
+            source_path=str(spec_path),
+            metadata=metadata,
+            endpoints=endpoints,
+            security_schemes=security_schemes,
+            schemas=self.schemas,
+            confidence=1.0,
+        )
+
+    def _merge_specs(self, specs: List[UnifiedAPISpec], spec_dir: Path) -> UnifiedAPISpec:
+        """Merge multiple specs into one."""
+        all_endpoints = []
+        all_schemas = {}
+        all_security_schemes = []
+
+        for spec in specs:
+            all_endpoints.extend(spec.endpoints)
+            all_schemas.update(spec.schemas)
+            all_security_schemes.extend(spec.security_schemes)
+
+        # Remove duplicate security schemes
+        unique_schemes = {s.name: s for s in all_security_schemes}.values()
+
+        merged_metadata = APIMetadata(
+            title=f"Repository APIs ({len(specs)} specs)",
+            version="combined",
+            description=f"Combined from {len(specs)} specifications: "
+            + ", ".join(s.metadata.title for s in specs),
+            base_url=specs[0].metadata.base_url if specs else None,
+        )
+
+        return UnifiedAPISpec(
+            source_type=SourceType.OPENAPI,
+            source_path=str(spec_dir),
+            metadata=merged_metadata,
+            endpoints=all_endpoints,
+            security_schemes=list(unique_schemes),
+            schemas=all_schemas,
+            confidence=1.0,
+        )
 
     def _parse_metadata(self) -> APIMetadata:
         """Parse API metadata from info section."""

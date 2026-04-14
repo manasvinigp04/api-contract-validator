@@ -1,0 +1,69 @@
+# API Contract Validator - Configuration for rage-proxy-inference
+
+project:
+  root: .
+  spec:
+    path: src/spec  # Directory with all 7 OpenAPI specs
+    format: openapi
+  endpoints:
+    directory: src
+    patterns:
+      - '**/*.py'
+      - '**/*.js'
+      - '**/*.ts'
+  tests:
+    directory: tests
+    patterns:
+      - test_*.py
+      - '*_test.py'
+      - '**/*.test.js'
+  output:
+    tests: tests/generated
+    reports: reports/acv
+
+api:
+  base_url: http://0.0.0.0:8084/api/v1/lm/document-grounding
+
+  # Default headers sent with EVERY request
+  headers:
+    AI-Resource-Group: "default"
+    AI-Main-Tenant: "test-tenant-id"
+    Authorization: "Bearer test-token"
+    Content-Type: "application/json"
+
+  environments:
+    local: http://localhost:8000
+    dev: https://dev-api.example.com
+    staging: https://staging-api.example.com
+    prod: https://api.example.com
+
+execution:
+  parallel_workers: 10
+  timeout_seconds: 30
+  retry_attempts: 3
+
+test_generation:
+  generate_valid: true
+  generate_invalid: true
+  generate_boundary: true
+  max_tests_per_endpoint: 50
+  enable_prioritization: true
+
+drift_detection:
+  detect_contract_drift: true
+  detect_validation_drift: true
+  detect_behavioral_drift: true
+
+ai_analysis:
+  enabled: true
+  model: claude-3-5-sonnet-20241022
+
+reporting:
+  formats:
+    - markdown
+    - json
+  generate_claude_integration: true  # Creates .acv/ folder
+
+logging:
+  level: INFO
+  format: detailed

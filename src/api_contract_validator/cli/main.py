@@ -252,6 +252,15 @@ def validate(
         test_suite = generator.generate_test_suite(unified_spec)
         console.print(f"   ✓ Generated {len(test_suite.test_cases)} test cases")
 
+        # Inject default headers from config into all test cases
+        if acv_config and "api" in acv_config and "headers" in acv_config["api"]:
+            default_headers = acv_config["api"]["headers"]
+            console.print(f"[cyan]🔑 Injecting {len(default_headers)} default headers into all tests...[/cyan]")
+            for test_case in test_suite.test_cases:
+                # Merge default headers (test-specific headers override defaults)
+                test_case.headers = {**default_headers, **test_case.headers}
+            console.print(f"   ✓ Headers: {', '.join(default_headers.keys())}")
+
         # Step 5: Execute tests
         console.print(f"[cyan]🚀 Executing tests (parallel={parallel})...[/cyan]")
         executor = TestExecutor(api_url, config.execution)
@@ -325,7 +334,7 @@ def validate(
 
         # Display Claude integration files
         if claude_files:
-            console.print("\n[bold]🤖 Claude Code Integration:[/bold]")
+            console.print("\n[bold]🤖 Claude Code Integration (.acv/):[/bold]")
             for format_name, path in claude_files.items():
                 file_description = {
                     "claude_md": "Project guidance",
@@ -335,8 +344,8 @@ def validate(
                 }.get(format_name, "Claude file")
                 console.print(f"  • {file_description}: [cyan]{path}[/cyan]")
 
-            console.print("\n[dim]💡 Use Claude Code CLI to fix issues:[/dim]")
-            console.print("[dim]   claude \"fix the validation drift issues\"[/dim]")
+            console.print("\n[dim]💡 Files in .acv/ folder to avoid conflicts[/dim]")
+            console.print("[dim]   Use: claude \"fix the validation drift issues\"[/dim]")
 
         # Exit with appropriate code
         if drift_report.has_critical_issues():
@@ -608,12 +617,97 @@ def init(
 
     # Interactive prompts if not provided
     if not spec_path:
-        spec_path = console.input("[cyan]Path to OpenAPI spec:[/cyan] [dim](e.g., api/openapi.yaml)[/dim] ")
-        spec_path = Path(spec_path) if spec_path else Path("api/openapi.yaml")
+        spec_path_input = console.input(
+            "[cyan]Path to OpenAPI spec (file or directory):[/cyan] [dim](e.g., openapi/api.yaml or openapi/)[/dim] "
+        )
+        spec_path = Path(spec_path_input) if spec_path_input else Path("openapi")
 
     if not api_url:
         api_url = console.input("[cyan]API base URL:[/cyan] [dim](e.g., http://localhost:8000)[/dim] ")
         api_url = api_url if api_url else "http://localhost:8000"
+
+    # Try to detect security requirements from spec
+    detected_headers = {}
+    security_info = []
+
+    console.print("\n[cyan]🔍 Analyzing OpenAPI spec for security requirements...[/cyan]")
+
+    try:
+        from api_contract_validator.input.openapi.parser import OpenAPIParser
+        parser = OpenAPIParser()
+
+        # Handle both file and directory paths
+        spec_file = spec_path
+        if spec_path.is_dir():
+            yaml_files = list(spec_path.glob("*.yaml")) + list(spec_path.glob("*.yml"))
+            if yaml_files:
+                spec_file = yaml_files[0]
+                console.print(f"   [dim]Found {len(yaml_files)} specs, analyzing {spec_file.name}[/dim]")
+
+        if spec_file.exists():
+            parsed_spec = parser.parse_file(spec_file)
+
+            # Detect security schemes
+            if parsed_spec.security_schemes:
+                console.print(f"   [green]✓ Found {len(parsed_spec.security_schemes)} security scheme(s)[/green]")
+                for scheme in parsed_spec.security_schemes:
+                    security_info.append(f"     • {scheme.name}: {scheme.type}")
+
+                    if scheme.type == "apiKey":
+                        detected_headers[scheme.name] = "YOUR_API_KEY_HERE"
+                    elif scheme.type in ["http", "bearer"]:
+                        detected_headers["Authorization"] = "Bearer YOUR_TOKEN_HERE"
+                    elif scheme.type == "oauth2":
+                        detected_headers["Authorization"] = "Bearer YOUR_OAUTH_TOKEN_HERE"
+
+                console.print("\n".join(security_info))
+            else:
+                console.print("   [dim]No security schemes defined in spec[/dim]")
+
+            # Check for custom headers in spec (x-headers or parameters)
+            for endpoint in parsed_spec.endpoints[:10]:  # Check first 10 endpoints
+                for param in endpoint.parameters:
+                    if param.location == "header" and param.name not in detected_headers:
+                        default_val = "YOUR_VALUE_HERE"
+                        if "tenant" in param.name.lower():
+                            default_val = "default-tenant-id"
+                        elif "resource" in param.name.lower():
+                            default_val = "default"
+                        detected_headers[param.name] = default_val
+
+            if detected_headers:
+                console.print(f"   [green]✓ Detected {len(detected_headers)} required header(s)[/green]")
+
+    except Exception as e:
+        console.print(f"   [dim]Could not analyze spec: {e}[/dim]")
+
+    # Ask if user wants to add custom headers
+    console.print("\n[cyan]🔑 HTTP Headers Configuration[/cyan]")
+
+    if detected_headers:
+        console.print("[dim]Detected headers from OpenAPI spec:[/dim]")
+        for header, value in detected_headers.items():
+            console.print(f"  • {header}: {value}")
+
+        use_detected = console.input("\n[cyan]Use detected headers?[/cyan] [dim](y/n, default: y)[/dim] ")
+        if use_detected.lower() not in ["n", "no"]:
+            headers = detected_headers
+        else:
+            headers = {}
+    else:
+        add_headers = console.input(
+            "[cyan]Does your API require custom headers?[/cyan] [dim](y/n, default: n)[/dim] "
+        )
+        headers = {}
+
+        if add_headers.lower() in ["y", "yes"]:
+            console.print("\n[dim]Enter headers (leave blank to finish):[/dim]")
+            while True:
+                header_name = console.input("  [cyan]Header name:[/cyan] ")
+                if not header_name:
+                    break
+                header_value = console.input(f"  [cyan]Default value for {header_name}:[/cyan] ")
+                headers[header_name] = header_value or "YOUR_VALUE_HERE"
 
     # Create configuration
     config = {
@@ -638,6 +732,7 @@ def init(
         },
         "api": {
             "base_url": api_url,
+            **({} if not headers else {"headers": headers}),  # Add headers if detected/configured
             "environments": {
                 "local": "http://localhost:8000",
                 "dev": "https://dev-api.example.com",
@@ -667,7 +762,8 @@ def init(
             "model": "claude-3-5-sonnet-20241022"
         },
         "reporting": {
-            "formats": ["markdown", "json"]
+            "formats": ["markdown", "json"],
+            "generate_claude_integration": True  # Generate .acv/ folder with Claude skills
         },
         "logging": {
             "level": "INFO",
@@ -675,17 +771,64 @@ def init(
         }
     }
 
-    # Write config file
+    # Write config file with helpful comments
+    console.print("\n[cyan]📝 Writing configuration...[/cyan]")
+
     with open(config_path, "w") as f:
+        f.write("# API Contract Validator Configuration\n")
+        f.write("# Generated by: acv init\n")
+        f.write(f"# Spec: {spec_path}\n")
+        f.write(f"# API: {api_url}\n\n")
+
+        if headers:
+            f.write("# ⚠️  SECURITY NOTE:\n")
+            f.write("#   - Replace placeholder values (YOUR_*) with actual credentials\n")
+            f.write("#   - Do NOT commit real secrets to version control\n")
+            f.write("#   - Consider using environment variables: ${ENV_VAR_NAME}\n")
+            f.write("#   - Add this file to .gitignore if it contains secrets\n\n")
+
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
+        # Add inline comments for headers section
+        if headers:
+            f.write("\n# Headers Configuration:\n")
+            f.write("# All headers in 'api.headers' are automatically included in every test request.\n")
+            f.write("# Common patterns:\n")
+            f.write("#   Authorization: Bearer ${AUTH_TOKEN}  (use env vars for secrets)\n")
+            f.write("#   Content-Type: application/json       (usually needed for POST/PUT)\n")
+            f.write("#   X-API-Key: ${API_KEY}                (for API key auth)\n")
+            f.write("#   X-Tenant-ID: ${TENANT_ID}            (for multi-tenant APIs)\n\n")
+
     console.print(f"\n[green]✅ Created acv_config.yaml[/green]")
+
+    if headers:
+        console.print("\n[yellow]⚠️  IMPORTANT: Update placeholder header values![/yellow]")
+        console.print("[dim]Replace 'YOUR_*' values with actual credentials before running tests.[/dim]")
+
+    console.print("\n[bold]Configuration Summary:[/bold]")
+    console.print(f"  • Spec: {spec_path}")
+    console.print(f"  • API: {api_url}")
+    if headers:
+        console.print(f"  • Headers: {len(headers)} configured")
+    console.print(f"  • Reports: reports/acv")
+    console.print(f"  • Claude Integration: .acv/ folder")
+
     console.print("\n[bold]Next steps:[/bold]")
     console.print("  1. Review and customize acv_config.yaml")
-    console.print("  2. Ensure your OpenAPI spec exists at:", spec_path)
-    console.print("  3. Start your API server")
-    console.print(f"  4. Run: [cyan]acv validate[/cyan]")
-    console.print("\n[dim]Tip: Use 'acv validate --env dev' to test against different environments[/dim]")
+    if headers:
+        console.print("  2. [yellow]Replace placeholder header values (YOUR_*)[/yellow]")
+        console.print("  3. Ensure your OpenAPI spec exists")
+        console.print("  4. Start your API server")
+        console.print(f"  5. Run: [cyan]acv validate[/cyan]")
+    else:
+        console.print("  2. Ensure your OpenAPI spec exists")
+        console.print("  3. Start your API server")
+        console.print(f"  4. Run: [cyan]acv validate[/cyan]")
+
+    console.print("\n[dim]Tips:[/dim]")
+    console.print("[dim]  • Use 'acv validate --env dev' to test different environments[/dim]")
+    console.print("[dim]  • Add acv_config.yaml to .gitignore if it contains secrets[/dim]")
+    console.print("[dim]  • View generated Claude guidance in .acv/CLAUDE.md after validation[/dim]")
 
 
 @cli.command()
