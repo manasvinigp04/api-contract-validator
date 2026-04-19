@@ -2,6 +2,7 @@
 Contract Rules Engine
 
 Validates data against contract rules and detects violations.
+Supports complex schema composition (discriminator, oneOf, anyOf, allOf).
 """
 
 import re
@@ -21,7 +22,87 @@ logger = get_logger(__name__)
 class RulesEngine:
     """
     Deterministic rules engine for contract validation.
+    Supports complex OpenAPI schema composition.
     """
+
+    def validate_schema(
+        self,
+        data: Dict[str, Any],
+        schema: Dict[str, Any],
+        endpoint_id: str,
+        location: str,
+        spec_dict: Optional[Dict[str, Any]] = None,
+    ) -> List[Violation]:
+        """
+        Validate data against OpenAPI schema with composition support.
+
+        Handles: discriminator, oneOf, anyOf, allOf
+
+        Args:
+            data: Data to validate
+            schema: OpenAPI schema definition
+            endpoint_id: Endpoint identifier
+            location: Location in request/response
+            spec_dict: Full OpenAPI spec for $ref resolution
+
+        Returns:
+            List of violations
+        """
+        violations = []
+
+        # Handle discriminator (polymorphic types)
+        if "discriminator" in schema:
+            from api_contract_validator.schema.composition.discriminator_validator import (
+                DiscriminatorValidator,
+            )
+
+            if spec_dict:
+                validator = DiscriminatorValidator(spec_dict)
+                disc_violations = validator.validate(data, schema, endpoint_id, location)
+                violations.extend(disc_violations)
+            else:
+                logger.warning(f"Discriminator found but no spec_dict provided for {endpoint_id}")
+
+        # Handle oneOf (exactly one schema must match)
+        if "oneOf" in schema:
+            from api_contract_validator.schema.composition.oneof_validator import OneOfValidator
+
+            if spec_dict:
+                validator = OneOfValidator(spec_dict)
+                oneof_violations = validator.validate(
+                    data, schema["oneOf"], endpoint_id, location
+                )
+                violations.extend(oneof_violations)
+            else:
+                logger.warning(f"oneOf found but no spec_dict provided for {endpoint_id}")
+
+        # Handle anyOf (at least one schema must match)
+        if "anyOf" in schema:
+            from api_contract_validator.schema.composition.anyof_validator import AnyOfValidator
+
+            if spec_dict:
+                validator = AnyOfValidator(spec_dict)
+                anyof_violations = validator.validate(
+                    data, schema["anyOf"], endpoint_id, location
+                )
+                violations.extend(anyof_violations)
+            else:
+                logger.warning(f"anyOf found but no spec_dict provided for {endpoint_id}")
+
+        # Handle allOf (all schemas must match)
+        if "allOf" in schema:
+            from api_contract_validator.schema.composition.allof_validator import AllOfValidator
+
+            if spec_dict:
+                validator = AllOfValidator(spec_dict)
+                allof_violations = validator.validate(
+                    data, schema["allOf"], endpoint_id, location
+                )
+                violations.extend(allof_violations)
+            else:
+                logger.warning(f"allOf found but no spec_dict provided for {endpoint_id}")
+
+        return violations
 
     def validate_against_rules(
         self,

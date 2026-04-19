@@ -34,6 +34,8 @@ class ContractDriftDetector:
         """
         self.api_contract = api_contract
         self.rules_engine = RulesEngine()
+        # Store spec dict for schema composition validation
+        self.spec_dict = getattr(api_contract.spec, 'raw_spec', {})
 
     def detect(self, execution_summary: ExecutionSummary) -> List[ContractDriftIssue]:
         """

@@ -204,6 +204,7 @@ class UnifiedAPISpec(BaseModel):
         default_factory=dict
     )  # Reusable schema definitions
     confidence: float = 1.0  # Overall confidence (lower for PRD-derived specs)
+    raw_spec: Dict[str, Any] = Field(default_factory=dict)  # Original OpenAPI spec for $ref resolution
 
     class Config:
         frozen = False

@@ -83,6 +83,7 @@ class OpenAPIParser:
                 security_schemes=security_schemes,
                 schemas=self.schemas,
                 confidence=1.0,
+                raw_spec=self.spec_dict,  # Store for schema composition validation
             )
 
             logger.info(
