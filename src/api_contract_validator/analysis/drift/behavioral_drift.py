@@ -32,6 +32,7 @@ class BehavioralDriftDetector:
         - Unexpected null values
         - Extra/missing fields across responses
         - Response structure anomalies
+        - Server errors (5xx) indicating API reliability issues
 
         Args:
             execution_summary: Test execution results
@@ -41,6 +42,10 @@ class BehavioralDriftDetector:
         """
         logger.info("Starting behavioral drift detection")
         drift_issues: List[BehavioralDriftIssue] = []
+
+        # FIRST: Detect 5xx server errors (critical reliability issue)
+        server_error_issues = self._detect_server_errors(execution_summary)
+        drift_issues.extend(server_error_issues)
 
         # Group responses by endpoint for comparison
         endpoint_responses: Dict[str, List] = defaultdict(list)
@@ -68,6 +73,67 @@ class BehavioralDriftDetector:
 
         logger.info(f"Behavioral drift detection complete: {len(drift_issues)} issues found")
         return drift_issues
+
+    def _detect_server_errors(self, execution_summary: ExecutionSummary) -> List[BehavioralDriftIssue]:
+        """
+        Detect 5xx server errors indicating API reliability/availability issues.
+
+        5xx errors are critical as they indicate:
+        - API implementation bugs
+        - Infrastructure failures
+        - Unhandled exceptions
+        """
+        issues = []
+
+        # Group 5xx errors by endpoint
+        endpoint_errors: Dict[str, List] = defaultdict(list)
+        for result in execution_summary.results:
+            if 500 <= result.status_code < 600:
+                endpoint_id = result.test_case.endpoint.endpoint_id
+                endpoint_errors[endpoint_id].append(result)
+
+        # Create issue for each affected endpoint
+        for endpoint_id, error_results in endpoint_errors.items():
+            total_tests_for_endpoint = sum(
+                1 for r in execution_summary.results
+                if r.test_case.endpoint.endpoint_id == endpoint_id
+            )
+            error_count = len(error_results)
+            error_rate = (error_count / total_tests_for_endpoint) * 100
+
+            # Collect status code distribution
+            status_codes = defaultdict(int)
+            for result in error_results:
+                status_codes[result.status_code] += 1
+
+            issue = BehavioralDriftIssue(
+                endpoint_id=endpoint_id,
+                test_ids=[r.test_case.test_id for r in error_results],
+                anomaly_type="server_errors",
+                description=(
+                    f"Endpoint returned {error_count} server errors (5xx) out of "
+                    f"{total_tests_for_endpoint} tests ({error_rate:.1f}% error rate). "
+                    f"Status codes: {dict(status_codes)}"
+                ),
+                evidence={
+                    "error_count": error_count,
+                    "total_tests": total_tests_for_endpoint,
+                    "error_rate_percent": round(error_rate, 2),
+                    "status_code_distribution": dict(status_codes),
+                    "sample_responses": [
+                        {
+                            "test_id": r.test_case.test_id,
+                            "status_code": r.status_code,
+                            "test_type": r.test_case.test_type.value,
+                        }
+                        for r in error_results[:5]  # Show first 5 examples
+                    ],
+                },
+                severity=DriftSeverity.CRITICAL if error_rate > 50 else DriftSeverity.HIGH,
+            )
+            issues.append(issue)
+
+        return issues
 
     def _detect_unexpected_nulls(self, endpoint_id: str, results: List) -> List[BehavioralDriftIssue]:
         """Detect fields that are sometimes null when they shouldn't be."""

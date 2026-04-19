@@ -283,13 +283,40 @@ class MarkdownReportGenerator:
 
     def _issue_to_dict(self, issue) -> Dict[str, Any]:
         """Convert drift issue to dictionary."""
-        return {
+        # Determine issue type
+        issue_type = type(issue).__name__
+
+        base_dict = {
             "severity": issue.severity.value if hasattr(issue.severity, "value") else issue.severity,
             "message": issue.message if hasattr(issue, "message") else issue.description,
-            "field_path": issue.field_path if hasattr(issue, "field_path") else "N/A",
-            "expected": str(issue.expected)[:100] if hasattr(issue, "expected") else "N/A",
-            "actual": str(issue.actual)[:100] if hasattr(issue, "actual") else "N/A",
+            "issue_type": issue_type,
         }
+
+        # Add type-specific fields
+        if hasattr(issue, "field_path"):
+            # Contract/Validation drift with field-level details
+            base_dict.update({
+                "field_path": issue.field_path,
+                "expected": str(issue.expected)[:100] if hasattr(issue, "expected") else "",
+                "actual": str(issue.actual)[:100] if hasattr(issue, "actual") else "",
+            })
+        elif hasattr(issue, "evidence"):
+            # Behavioral drift with evidence
+            base_dict.update({
+                "field_path": None,
+                "expected": None,
+                "actual": None,
+                "evidence": issue.evidence,
+            })
+        else:
+            # Fallback
+            base_dict.update({
+                "field_path": None,
+                "expected": None,
+                "actual": None,
+            })
+
+        return base_dict
 
     def _serialize_contract_drift(self, issues: List) -> List[Dict[str, Any]]:
         """Serialize contract drift issues for template."""

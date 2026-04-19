@@ -114,9 +114,14 @@ No behavioral drift detected.
 **Issues:**
 {% for issue in endpoint_report.drift_summary.issues %}
 - **[{{ issue.severity }}]** {{ issue.message }}
+{% if issue.field_path %}
   - Field: `{{ issue.field_path }}`
   - Expected: `{{ issue.expected }}`
   - Actual: `{{ issue.actual }}`
+{% elif issue.evidence %}
+  - Error Rate: {{ issue.evidence.error_rate_percent }}%
+  - Status Codes: {{ issue.evidence.status_code_distribution }}
+{% endif %}
 {% endfor %}
 {% endif %}
 
