@@ -10,6 +10,7 @@ from api_contract_validator.config.logging import get_logger
 from api_contract_validator.config.models import TestGenerationConfig
 from api_contract_validator.generation.base import TestCase, TestSuite
 from api_contract_validator.generation.boundary.generator import BoundaryTestGenerator
+from api_contract_validator.generation.fuzzing.fuzzer import FuzzingTestGenerator
 from api_contract_validator.generation.invalid.generator import InvalidTestGenerator
 from api_contract_validator.generation.prioritizer.risk_ranker import RiskBasedPrioritizer
 from api_contract_validator.generation.valid.generator import ValidTestGenerator
@@ -28,6 +29,7 @@ class MasterTestGenerator:
         self.valid_generator = ValidTestGenerator()
         self.invalid_generator = InvalidTestGenerator()
         self.boundary_generator = BoundaryTestGenerator()
+        self.fuzzing_generator = FuzzingTestGenerator(corpus_size=getattr(config, 'fuzzing_corpus_size', 20))
         self.prioritizer = RiskBasedPrioritizer(config)
 
     def generate_test_suite(self, spec: UnifiedAPISpec) -> TestSuite:
@@ -89,6 +91,11 @@ class MasterTestGenerator:
         if self.config.generate_boundary:
             boundary_tests = self.boundary_generator.generate_tests(endpoint)
             tests.extend(boundary_tests)
+
+        # Generate fuzzing tests
+        if getattr(self.config, 'generate_fuzzing', False):
+            fuzzing_tests = self.fuzzing_generator.generate_tests(endpoint)
+            tests.extend(fuzzing_tests)
 
         # Limit tests per endpoint
         if len(tests) > self.config.max_tests_per_endpoint:

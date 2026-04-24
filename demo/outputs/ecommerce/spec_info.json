@@ -1,0 +1,14 @@
+{
+  "spec_file": "e-commerce-api.yaml",
+  "title": "E-Commerce Platform API",
+  "version": "2.1.0",
+  "endpoint_count": 18,
+  "schema_count": 21,
+  "endpoints_by_method": {
+    "GET": 7,
+    "POST": 5,
+    "PATCH": 4,
+    "DELETE": 2
+  },
+  "analyzed_at": "2026-04-25T02:14:38.916997"
+}

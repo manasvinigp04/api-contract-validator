@@ -1,0 +1,13 @@
+{
+  "spec_file": "healthcare-api.yaml",
+  "title": "HealthTech Patient Management API",
+  "version": "3.2.0",
+  "endpoint_count": 16,
+  "schema_count": 22,
+  "endpoints_by_method": {
+    "POST": 5,
+    "GET": 8,
+    "PATCH": 3
+  },
+  "analyzed_at": "2026-04-25T02:14:38.996132"
+}

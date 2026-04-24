@@ -1,0 +1,1084 @@
+openapi: 3.0.0
+info:
+  title: HealthTech Patient Management API
+  version: 3.2.0
+  description: |
+    HIPAA-compliant healthcare API for patient management, medical records,
+    appointment scheduling, telemedicine, and prescriptions.
+
+    Complex scenarios include:
+    - Strict HIPAA compliance constraints
+    - Multi-role authorization (patient, doctor, admin, pharmacist)
+    - Sensitive data handling with encryption requirements
+    - Complex temporal constraints (appointment scheduling)
+    - Prescription workflow with controlled substances
+    - Audit logging for all operations
+
+servers:
+  - url: https://api.healthtech.example.com/v3
+    description: Production server (HIPAA-compliant)
+  - url: http://localhost:9000/v3
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /patients:
+    post:
+      summary: Register new patient
+      operationId: registerPatient
+      tags: [Patients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientRegistration'
+      responses:
+        '201':
+          description: Patient registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Patient already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /patients/{patientId}:
+    parameters:
+      - name: patientId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get patient details
+      operationId: getPatient
+      tags: [Patients]
+      responses:
+        '200':
+          description: Patient details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update patient information
+      operationId: updatePatient
+      tags: [Patients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientUpdate'
+      responses:
+        '200':
+          description: Patient updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /patients/{patientId}/medical-records:
+    parameters:
+      - name: patientId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get patient medical records
+      operationId: getMedicalRecords
+      tags: [Medical Records]
+      parameters:
+        - name: recordType
+          in: query
+          schema:
+            type: string
+            enum: [diagnosis, lab_result, imaging, procedure, vitals]
+        - name: fromDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Medical records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: Add medical record
+      operationId: addMedicalRecord
+      tags: [Medical Records]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalRecordInput'
+      responses:
+        '201':
+          description: Medical record added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /appointments:
+    get:
+      summary: List appointments
+      operationId: listAppointments
+      tags: [Appointments]
+      parameters:
+        - name: patientId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: doctorId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [scheduled, confirmed, in_progress, completed, cancelled, no_show]
+        - name: fromDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: toDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: List of appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Appointment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Schedule appointment
+      operationId: scheduleAppointment
+      tags: [Appointments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentInput'
+      responses:
+        '201':
+          description: Appointment scheduled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Conflict (time slot unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /appointments/{appointmentId}:
+    parameters:
+      - name: appointmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get appointment details
+      operationId: getAppointment
+      tags: [Appointments]
+      responses:
+        '200':
+          description: Appointment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update appointment
+      operationId: updateAppointment
+      tags: [Appointments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentUpdate'
+      responses:
+        '200':
+          description: Appointment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /appointments/{appointmentId}/notes:
+    parameters:
+      - name: appointmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      summary: Add clinical notes
+      operationId: addClinicalNotes
+      tags: [Appointments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicalNotesInput'
+      responses:
+        '201':
+          description: Clinical notes added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /prescriptions:
+    get:
+      summary: List prescriptions
+      operationId: listPrescriptions
+      tags: [Prescriptions]
+      parameters:
+        - name: patientId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, completed, cancelled, expired]
+      responses:
+        '200':
+          description: List of prescriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Prescription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Create prescription
+      operationId: createPrescription
+      tags: [Prescriptions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrescriptionInput'
+      responses:
+        '201':
+          description: Prescription created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prescription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /prescriptions/{prescriptionId}:
+    parameters:
+      - name: prescriptionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get prescription details
+      operationId: getPrescription
+      tags: [Prescriptions]
+      responses:
+        '200':
+          description: Prescription details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prescription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update prescription (refill or cancel)
+      operationId: updatePrescription
+      tags: [Prescriptions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrescriptionUpdate'
+      responses:
+        '200':
+          description: Prescription updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prescription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /doctors:
+    get:
+      summary: List doctors
+      operationId: listDoctors
+      tags: [Doctors]
+      parameters:
+        - name: specialty
+          in: query
+          schema:
+            type: string
+            enum: [cardiology, dermatology, neurology, orthopedics, pediatrics, psychiatry]
+        - name: availableDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of doctors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Doctor'
+
+  /doctors/{doctorId}/availability:
+    parameters:
+      - name: doctorId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get doctor availability
+      operationId: getDoctorAvailability
+      tags: [Doctors]
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: duration
+          in: query
+          schema:
+            type: integer
+            minimum: 15
+            maximum: 120
+            default: 30
+      responses:
+        '200':
+          description: Available time slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TimeSlot'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    PatientRegistration:
+      type: object
+      required: [firstName, lastName, dateOfBirth, ssn, email, phone, address]
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 50
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 50
+        middleName:
+          type: string
+          maxLength: 50
+        dateOfBirth:
+          type: string
+          format: date
+        ssn:
+          type: string
+          pattern: '^\d{3}-\d{2}-\d{4}$'
+          description: Social Security Number (encrypted in transit and at rest)
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          pattern: '^\+?1?\d{10}$'
+        address:
+          $ref: '#/components/schemas/Address'
+        emergencyContact:
+          $ref: '#/components/schemas/EmergencyContact'
+        insuranceInfo:
+          $ref: '#/components/schemas/InsuranceInfo'
+        medicalHistory:
+          type: object
+          properties:
+            allergies:
+              type: array
+              items:
+                type: string
+            chronicConditions:
+              type: array
+              items:
+                type: string
+            currentMedications:
+              type: array
+              items:
+                type: string
+            bloodType:
+              type: string
+              enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+
+    Patient:
+      allOf:
+        - type: object
+          required: [id, mrn, status, createdAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            mrn:
+              type: string
+              pattern: '^MRN-[0-9]{10}$'
+              description: Medical Record Number
+            status:
+              type: string
+              enum: [active, inactive, deceased]
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+        - $ref: '#/components/schemas/PatientRegistration'
+
+    PatientUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          pattern: '^\+?1?\d{10}$'
+        address:
+          $ref: '#/components/schemas/Address'
+        emergencyContact:
+          $ref: '#/components/schemas/EmergencyContact'
+
+    Address:
+      type: object
+      required: [street, city, state, zipCode]
+      properties:
+        street:
+          type: string
+          minLength: 5
+          maxLength: 200
+        street2:
+          type: string
+          maxLength: 100
+        city:
+          type: string
+          minLength: 2
+          maxLength: 100
+        state:
+          type: string
+          pattern: '^[A-Z]{2}$'
+        zipCode:
+          type: string
+          pattern: '^\d{5}(-\d{4})?$'
+
+    EmergencyContact:
+      type: object
+      required: [name, relationship, phone]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        relationship:
+          type: string
+          enum: [spouse, parent, child, sibling, friend, other]
+        phone:
+          type: string
+          pattern: '^\+?1?\d{10}$'
+        email:
+          type: string
+          format: email
+
+    InsuranceInfo:
+      type: object
+      required: [provider, policyNumber]
+      properties:
+        provider:
+          type: string
+          minLength: 2
+          maxLength: 100
+        policyNumber:
+          type: string
+          minLength: 5
+          maxLength: 50
+        groupNumber:
+          type: string
+        subscriberId:
+          type: string
+        effectiveDate:
+          type: string
+          format: date
+        expirationDate:
+          type: string
+          format: date
+
+    MedicalRecord:
+      type: object
+      required: [id, patientId, recordType, recordedBy, recordedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        recordType:
+          type: string
+          enum: [diagnosis, lab_result, imaging, procedure, vitals]
+        recordedBy:
+          type: string
+          format: uuid
+          description: Doctor/Provider ID
+        recordedAt:
+          type: string
+          format: date-time
+        diagnosis:
+          $ref: '#/components/schemas/Diagnosis'
+        labResult:
+          $ref: '#/components/schemas/LabResult'
+        vitals:
+          $ref: '#/components/schemas/Vitals'
+        notes:
+          type: string
+          maxLength: 5000
+
+    MedicalRecordInput:
+      type: object
+      required: [recordType]
+      properties:
+        recordType:
+          type: string
+          enum: [diagnosis, lab_result, imaging, procedure, vitals]
+        diagnosis:
+          $ref: '#/components/schemas/Diagnosis'
+        labResult:
+          $ref: '#/components/schemas/LabResult'
+        vitals:
+          $ref: '#/components/schemas/Vitals'
+        notes:
+          type: string
+          maxLength: 5000
+
+    Diagnosis:
+      type: object
+      required: [code, description, severity]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Z][0-9]{2}(\.[0-9]{1,2})?$'
+          description: ICD-10 code
+        description:
+          type: string
+          maxLength: 500
+        severity:
+          type: string
+          enum: [mild, moderate, severe, critical]
+        diagnosedDate:
+          type: string
+          format: date
+
+    LabResult:
+      type: object
+      required: [testName, value, unit, normalRange]
+      properties:
+        testName:
+          type: string
+        value:
+          type: number
+        unit:
+          type: string
+        normalRange:
+          type: object
+          required: [min, max]
+          properties:
+            min:
+              type: number
+            max:
+              type: number
+        isAbnormal:
+          type: boolean
+        testDate:
+          type: string
+          format: date-time
+
+    Vitals:
+      type: object
+      properties:
+        bloodPressure:
+          type: object
+          required: [systolic, diastolic]
+          properties:
+            systolic:
+              type: integer
+              minimum: 40
+              maximum: 300
+            diastolic:
+              type: integer
+              minimum: 20
+              maximum: 200
+        heartRate:
+          type: integer
+          minimum: 20
+          maximum: 300
+        temperature:
+          type: number
+          minimum: 90.0
+          maximum: 115.0
+        weight:
+          type: number
+          minimum: 1.0
+          maximum: 1000.0
+        height:
+          type: number
+          minimum: 10.0
+          maximum: 300.0
+        oxygenSaturation:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    Appointment:
+      type: object
+      required: [id, patientId, doctorId, appointmentType, scheduledStart, scheduledEnd, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        doctorId:
+          type: string
+          format: uuid
+        appointmentType:
+          type: string
+          enum: [consultation, follow_up, procedure, telemedicine, emergency]
+        scheduledStart:
+          type: string
+          format: date-time
+        scheduledEnd:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [scheduled, confirmed, in_progress, completed, cancelled, no_show]
+        location:
+          type: string
+        reason:
+          type: string
+          maxLength: 500
+        clinicalNotes:
+          type: string
+          maxLength: 10000
+        telemedicineLink:
+          type: string
+          format: uri
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AppointmentInput:
+      type: object
+      required: [patientId, doctorId, appointmentType, scheduledStart, duration]
+      properties:
+        patientId:
+          type: string
+          format: uuid
+        doctorId:
+          type: string
+          format: uuid
+        appointmentType:
+          type: string
+          enum: [consultation, follow_up, procedure, telemedicine, emergency]
+        scheduledStart:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+          minimum: 15
+          maximum: 180
+          description: Duration in minutes
+        reason:
+          type: string
+          maxLength: 500
+
+    AppointmentUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        scheduledStart:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [confirmed, cancelled, no_show]
+        cancellationReason:
+          type: string
+          maxLength: 500
+
+    ClinicalNotesInput:
+      type: object
+      required: [notes]
+      properties:
+        notes:
+          type: string
+          minLength: 10
+          maxLength: 10000
+        diagnoses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Diagnosis'
+        prescriptions:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    Prescription:
+      type: object
+      required: [id, patientId, doctorId, medication, dosage, frequency, startDate, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        doctorId:
+          type: string
+          format: uuid
+        medication:
+          $ref: '#/components/schemas/Medication'
+        dosage:
+          type: string
+          pattern: '^[0-9]+(\.[0-9]+)?\s?(mg|g|ml|mcg|units)$'
+        frequency:
+          type: string
+          enum: [once_daily, twice_daily, three_times_daily, four_times_daily, as_needed, every_4_hours, every_6_hours, every_8_hours, every_12_hours]
+        route:
+          type: string
+          enum: [oral, topical, intravenous, intramuscular, subcutaneous, inhalation]
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        refillsRemaining:
+          type: integer
+          minimum: 0
+          maximum: 12
+        status:
+          type: string
+          enum: [active, completed, cancelled, expired]
+        instructions:
+          type: string
+          maxLength: 500
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PrescriptionInput:
+      type: object
+      required: [patientId, medication, dosage, frequency, route, startDate, duration]
+      properties:
+        patientId:
+          type: string
+          format: uuid
+        medication:
+          $ref: '#/components/schemas/Medication'
+        dosage:
+          type: string
+          pattern: '^[0-9]+(\.[0-9]+)?\s?(mg|g|ml|mcg|units)$'
+        frequency:
+          type: string
+          enum: [once_daily, twice_daily, three_times_daily, four_times_daily, as_needed, every_4_hours, every_6_hours, every_8_hours, every_12_hours]
+        route:
+          type: string
+          enum: [oral, topical, intravenous, intramuscular, subcutaneous, inhalation]
+        startDate:
+          type: string
+          format: date
+        duration:
+          type: integer
+          minimum: 1
+          maximum: 365
+          description: Duration in days
+        refills:
+          type: integer
+          minimum: 0
+          maximum: 12
+        instructions:
+          type: string
+          maxLength: 500
+
+    PrescriptionUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        status:
+          type: string
+          enum: [cancelled]
+        refillsRemaining:
+          type: integer
+          minimum: 0
+          maximum: 12
+
+    Medication:
+      type: object
+      required: [name, ndcCode]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 200
+        ndcCode:
+          type: string
+          pattern: '^\d{5}-\d{4}-\d{2}$'
+          description: National Drug Code
+        isControlled:
+          type: boolean
+        schedule:
+          type: string
+          enum: ['I', 'II', 'III', 'IV', 'V']
+          description: DEA Schedule for controlled substances
+
+    Doctor:
+      type: object
+      required: [id, firstName, lastName, specialty, licenseNumber, npiNumber]
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        specialty:
+          type: string
+          enum: [cardiology, dermatology, neurology, orthopedics, pediatrics, psychiatry]
+        licenseNumber:
+          type: string
+          pattern: '^[A-Z]{2}-[0-9]{6}$'
+        npiNumber:
+          type: string
+          pattern: '^\d{10}$'
+          description: National Provider Identifier
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+
+    TimeSlot:
+      type: object
+      required: [start, end, available]
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+
+    Error:
+      type: object
+      required: [error, message, timestamp]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              issue:
+                type: string
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+          format: uuid
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized - Invalid or missing authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden - Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

@@ -1,0 +1,1111 @@
+openapi: 3.0.0
+info:
+  title: E-Commerce Platform API
+  version: 2.1.0
+  description: |
+    Comprehensive e-commerce API supporting product catalog, shopping cart,
+    order management, payment processing, and user authentication.
+
+    This API demonstrates complex scenarios including:
+    - Schema composition (oneOf, anyOf, allOf)
+    - Discriminators for polymorphic responses
+    - Complex validation rules and constraints
+    - Multi-step workflows (cart → checkout → payment → fulfillment)
+    - Nested objects and arrays
+    - Security with OAuth2 and API keys
+
+servers:
+  - url: https://api.ecommerce.example.com/v2
+    description: Production server
+  - url: http://localhost:8080/v2
+    description: Local development server
+
+security:
+  - bearerAuth: []
+  - apiKey: []
+
+paths:
+  /products:
+    get:
+      summary: Search and list products
+      operationId: listProducts
+      tags: [Products]
+      security: []  # Public endpoint
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [electronics, clothing, books, home, sports]
+        - name: minPrice
+          in: query
+          schema:
+            type: number
+            minimum: 0
+        - name: maxPrice
+          in: query
+          schema:
+            type: number
+            minimum: 0
+        - name: inStock
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [price_asc, price_desc, rating, newest]
+      responses:
+        '200':
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    post:
+      summary: Create a new product
+      operationId: createProduct
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInput'
+      responses:
+        '201':
+          description: Product created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /products/{productId}:
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[A-Z0-9]{8}$'
+
+    get:
+      summary: Get product details
+      operationId: getProduct
+      tags: [Products]
+      security: []  # Public endpoint
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update product
+      operationId: updateProduct
+      tags: [Products]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdate'
+      responses:
+        '200':
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete product
+      operationId: deleteProduct
+      tags: [Products]
+      responses:
+        '204':
+          description: Product deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /cart:
+    get:
+      summary: Get current user's cart
+      operationId: getCart
+      tags: [Cart]
+      responses:
+        '200':
+          description: Current cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Add item to cart
+      operationId: addToCart
+      tags: [Cart]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, quantity]
+              properties:
+                productId:
+                  type: string
+                  pattern: '^[A-Z0-9]{8}$'
+                quantity:
+                  type: integer
+                  minimum: 1
+                  maximum: 99
+                customization:
+                  type: object
+                  properties:
+                    size:
+                      type: string
+                      enum: [XS, S, M, L, XL, XXL]
+                    color:
+                      type: string
+                    engraving:
+                      type: string
+                      maxLength: 50
+      responses:
+        '200':
+          description: Item added to cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /cart/items/{itemId}:
+    parameters:
+      - name: itemId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    patch:
+      summary: Update cart item quantity
+      operationId: updateCartItem
+      tags: [Cart]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 1
+                  maximum: 99
+      responses:
+        '200':
+          description: Cart item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Remove item from cart
+      operationId: removeFromCart
+      tags: [Cart]
+      responses:
+        '200':
+          description: Item removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /orders:
+    get:
+      summary: List user's orders
+      operationId: listOrders
+      tags: [Orders]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, processing, shipped, delivered, cancelled]
+        - name: fromDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Create order from cart
+      operationId: createOrder
+      tags: [Orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderInput'
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: Unprocessable entity (e.g., cart empty, items out of stock)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /orders/{orderId}:
+    parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get order details
+      operationId: getOrder
+      tags: [Orders]
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update order (cancel only)
+      operationId: updateOrder
+      tags: [Orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [cancelled]
+                cancellationReason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Order updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conflict (e.g., order already shipped)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /payments:
+    post:
+      summary: Process payment for order
+      operationId: processPayment
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentInput'
+      responses:
+        '200':
+          description: Payment processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '402':
+          description: Payment required (payment failed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResult'
+
+  /users/profile:
+    get:
+      summary: Get current user profile
+      operationId: getUserProfile
+      tags: [Users]
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      summary: Update user profile
+      operationId: updateUserProfile
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfileUpdate'
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/addresses:
+    get:
+      summary: List user addresses
+      operationId: listAddresses
+      tags: [Users]
+      responses:
+        '200':
+          description: List of addresses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Address'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Add new address
+      operationId: addAddress
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressInput'
+      responses:
+        '201':
+          description: Address added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    Product:
+      type: object
+      required: [id, name, sku, price, category, inStock, createdAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[A-Z0-9]{8}$'
+          example: 'PROD0001'
+        name:
+          type: string
+          minLength: 3
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        sku:
+          type: string
+          pattern: '^SKU-[A-Z0-9]{6}$'
+        price:
+          type: number
+          minimum: 0.01
+          maximum: 999999.99
+          multipleOf: 0.01
+        compareAtPrice:
+          type: number
+          minimum: 0.01
+        category:
+          type: string
+          enum: [electronics, clothing, books, home, sports]
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+        images:
+          type: array
+          items:
+            type: object
+            required: [url]
+            properties:
+              url:
+                type: string
+                format: uri
+              alt:
+                type: string
+              isPrimary:
+                type: boolean
+          minItems: 1
+          maxItems: 10
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductVariant'
+        inventory:
+          type: object
+          required: [quantity, inStock]
+          properties:
+            quantity:
+              type: integer
+              minimum: 0
+            inStock:
+              type: boolean
+            lowStockThreshold:
+              type: integer
+              minimum: 0
+        rating:
+          type: object
+          properties:
+            average:
+              type: number
+              minimum: 0
+              maximum: 5
+            count:
+              type: integer
+              minimum: 0
+        inStock:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProductInput:
+      type: object
+      required: [name, sku, price, category]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        sku:
+          type: string
+          pattern: '^SKU-[A-Z0-9]{6}$'
+        price:
+          type: number
+          minimum: 0.01
+          maximum: 999999.99
+        category:
+          type: string
+          enum: [electronics, clothing, books, home, sports]
+        tags:
+          type: array
+          items:
+            type: string
+        initialQuantity:
+          type: integer
+          minimum: 0
+          default: 0
+
+    ProductUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        price:
+          type: number
+          minimum: 0.01
+        inStock:
+          type: boolean
+
+    ProductVariant:
+      type: object
+      required: [id, name, sku, priceModifier]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        sku:
+          type: string
+        priceModifier:
+          type: number
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+
+    Cart:
+      type: object
+      required: [id, userId, items, totals, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        totals:
+          $ref: '#/components/schemas/CartTotals'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CartItem:
+      type: object
+      required: [id, productId, productName, quantity, unitPrice, totalPrice]
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+        productName:
+          type: string
+        productImage:
+          type: string
+          format: uri
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 99
+        unitPrice:
+          type: number
+          minimum: 0
+        totalPrice:
+          type: number
+          minimum: 0
+        customization:
+          type: object
+
+    CartTotals:
+      type: object
+      required: [subtotal, tax, shipping, total]
+      properties:
+        subtotal:
+          type: number
+          minimum: 0
+        tax:
+          type: number
+          minimum: 0
+        shipping:
+          type: number
+          minimum: 0
+        discount:
+          type: number
+          minimum: 0
+        total:
+          type: number
+          minimum: 0
+
+    Order:
+      type: object
+      required: [id, userId, status, items, totals, shippingAddress, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderNumber:
+          type: string
+          pattern: '^ORD-[0-9]{8}$'
+        userId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, processing, shipped, delivered, cancelled]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+          minItems: 1
+        totals:
+          $ref: '#/components/schemas/CartTotals'
+        shippingAddress:
+          $ref: '#/components/schemas/Address'
+        billingAddress:
+          $ref: '#/components/schemas/Address'
+        paymentStatus:
+          type: string
+          enum: [pending, authorized, captured, failed, refunded]
+        trackingNumber:
+          type: string
+        estimatedDelivery:
+          type: string
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OrderItem:
+      type: object
+      required: [productId, productName, quantity, unitPrice, totalPrice]
+      properties:
+        productId:
+          type: string
+        productName:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        unitPrice:
+          type: number
+          minimum: 0
+        totalPrice:
+          type: number
+          minimum: 0
+
+    OrderInput:
+      type: object
+      required: [shippingAddressId, paymentMethodId]
+      properties:
+        shippingAddressId:
+          type: string
+          format: uuid
+        billingAddressId:
+          type: string
+          format: uuid
+        paymentMethodId:
+          type: string
+        promoCode:
+          type: string
+          pattern: '^[A-Z0-9]{6,12}$'
+        specialInstructions:
+          type: string
+          maxLength: 500
+
+    PaymentInput:
+      type: object
+      required: [orderId, paymentMethod]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        paymentMethod:
+          oneOf:
+            - $ref: '#/components/schemas/CreditCardPayment'
+            - $ref: '#/components/schemas/PayPalPayment'
+            - $ref: '#/components/schemas/BankTransferPayment'
+          discriminator:
+            propertyName: type
+            mapping:
+              credit_card: '#/components/schemas/CreditCardPayment'
+              paypal: '#/components/schemas/PayPalPayment'
+              bank_transfer: '#/components/schemas/BankTransferPayment'
+
+    CreditCardPayment:
+      type: object
+      required: [type, cardNumber, expiryMonth, expiryYear, cvv, cardholderName]
+      properties:
+        type:
+          type: string
+          enum: [credit_card]
+        cardNumber:
+          type: string
+          pattern: '^[0-9]{16}$'
+        expiryMonth:
+          type: integer
+          minimum: 1
+          maximum: 12
+        expiryYear:
+          type: integer
+          minimum: 2024
+          maximum: 2040
+        cvv:
+          type: string
+          pattern: '^[0-9]{3,4}$'
+        cardholderName:
+          type: string
+          minLength: 2
+
+    PayPalPayment:
+      type: object
+      required: [type, email]
+      properties:
+        type:
+          type: string
+          enum: [paypal]
+        email:
+          type: string
+          format: email
+
+    BankTransferPayment:
+      type: object
+      required: [type, accountNumber, routingNumber]
+      properties:
+        type:
+          type: string
+          enum: [bank_transfer]
+        accountNumber:
+          type: string
+          pattern: '^[0-9]{10,12}$'
+        routingNumber:
+          type: string
+          pattern: '^[0-9]{9}$'
+
+    PaymentResult:
+      type: object
+      required: [transactionId, status, amount, timestamp]
+      properties:
+        transactionId:
+          type: string
+        status:
+          type: string
+          enum: [success, failed, pending]
+        amount:
+          type: number
+          minimum: 0
+        currency:
+          type: string
+          enum: [USD, EUR, GBP]
+          default: USD
+        failureReason:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    UserProfile:
+      type: object
+      required: [id, email, firstName, lastName, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 50
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 50
+        phone:
+          type: string
+          pattern: '^\+?[1-9]\d{1,14}$'
+        dateOfBirth:
+          type: string
+          format: date
+        preferences:
+          type: object
+          properties:
+            newsletter:
+              type: boolean
+            smsNotifications:
+              type: boolean
+            language:
+              type: string
+              enum: [en, es, fr, de]
+        createdAt:
+          type: string
+          format: date-time
+
+    UserProfileUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 50
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 50
+        phone:
+          type: string
+          pattern: '^\+?[1-9]\d{1,14}$'
+        preferences:
+          type: object
+
+    Address:
+      type: object
+      required: [id, street, city, state, postalCode, country]
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+          enum: [home, work, other]
+        street:
+          type: string
+          minLength: 5
+          maxLength: 200
+        street2:
+          type: string
+          maxLength: 200
+        city:
+          type: string
+          minLength: 2
+          maxLength: 100
+        state:
+          type: string
+          minLength: 2
+          maxLength: 50
+        postalCode:
+          type: string
+          pattern: '^[0-9]{5}(-[0-9]{4})?$'
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
+        isDefault:
+          type: boolean
+
+    AddressInput:
+      type: object
+      required: [street, city, state, postalCode, country]
+      properties:
+        label:
+          type: string
+          enum: [home, work, other]
+        street:
+          type: string
+          minLength: 5
+          maxLength: 200
+        street2:
+          type: string
+          maxLength: 200
+        city:
+          type: string
+          minLength: 2
+          maxLength: 100
+        state:
+          type: string
+          minLength: 2
+          maxLength: 50
+        postalCode:
+          type: string
+          pattern: '^[0-9]{5}(-[0-9]{4})?$'
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
+        isDefault:
+          type: boolean
+
+    Pagination:
+      type: object
+      required: [page, limit, total, totalPages]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              issue:
+                type: string
+        requestId:
+          type: string
+          format: uuid
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

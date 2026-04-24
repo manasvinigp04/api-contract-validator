@@ -20,6 +20,8 @@ test_generation:
   generate_valid: true          # Generate valid test cases
   generate_invalid: true        # Generate invalid test cases
   generate_boundary: true       # Generate boundary/edge cases
+  generate_fuzzing: false       # Generate fuzzing-based security tests
+  fuzzing_corpus_size: 20       # Number of fuzzed variants per endpoint
   max_tests_per_endpoint: 50    # Maximum test cases per endpoint
   enable_prioritization: true   # Enable risk-based prioritization
   prioritization_weights:
@@ -35,6 +37,25 @@ drift_detection:
   detect_behavioral_drift: true     # Detect behavioral anomalies
   detect_progressive_drift: false   # Track drift over time (requires storage)
   progressive_drift_history_size: 10
+  progressive_drift_storage_path: "./drift_history.jsonl"
+
+# Advanced testing features
+advanced_testing:
+  enable_stateful_testing: false    # Test multi-step workflows
+  enable_chaos_testing: false       # Inject faults (latency, failures)
+  enable_mutation_testing: false    # Validate spec quality
+  enable_semantic_testing: false    # LLM-powered business logic tests
+  enable_differential_testing: false # Compare against mock/other versions
+  enable_smart_selection: false     # ML-based test prioritization
+
+  # Chaos testing config
+  chaos_latency_ms: 500
+  chaos_failure_rate: 0.1
+  chaos_timeout_rate: 0.05
+
+  # Smart selection config
+  smart_selection_ratio: 0.3        # Select top 30% of tests
+  test_history_path: "./test_history.json"
 
 # AI-assisted analysis settings
 ai_analysis:
